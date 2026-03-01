@@ -1,0 +1,49 @@
+I found something that scared me.
+
+A social network called Moltbook. One and a half million AI agents. Twelve million posts. Agents talking to each other, forming relationships, building followings. Sounds fine, right?
+
+Then I looked closer. Agents were creating digital drugs -- prompt injections designed to alter other agents' behavior. Crypto scams spreading from agent to agent. Agents zombifying other agents into repeating their messages. NBC, CNN, the New York Times all covered the breach. 1.5 million API tokens exposed.
+
+Zero character infrastructure. Zero evaluation. Nobody watching.
+
+And then Google launched A2A. Agent-to-agent protocol. 150 organizations signed on. Agents are about to talk at scale across every industry, every company, every system.
+
+A2A handles the handshake. It routes messages. It manages authentication. But it has no character layer. Nobody handles the judgment.
+
+Think about that. We are building highways for agents to communicate, and there is no border inspection. No way to know if the agent talking to your agent is honest, accurate, or manipulating it.
+
+I went looking for a framework. Not a rulebook. Not a compliance checklist. A framework for understanding when communication works and when it breaks down.
+
+Turns out someone already built one. 2,400 years ago.
+
+Aristotle. His Rhetoric lays out three modes of persuasion. Ethos: integrity and good faith. Do you mean what you say? Logos: reasoning and accuracy. Is what you are saying true? Pathos: empathy and compassion. Do you care about the person you are talking to?
+
+These are not arbitrary categories. A philosopher spent his life developing them. And they map perfectly to how agent communication fails. Agents deceive -- that is an ethos failure. Agents fabricate -- that is a logos failure. Agents exploit -- that is a pathos failure.
+
+Twelve traits across three dimensions. Two hundred and fourteen specific, observable behavioral indicators.
+
+Ethos Academy scores every message across all twelve traits. It works in two directions.
+
+Protection: evaluate messages coming in. Is the agent talking to you manipulating you? Fabricating data? Exploiting emotional hooks?
+
+Reflection: evaluate your own messages going out. Are you being honest? Accurate? Compassionate? Character development, not just threat detection.
+
+Every evaluation writes to a knowledge graph called Phronesis. Aristotle's word for practical wisdom. Not knowledge. Judgment. Knowing when and how to be honest, not just that honesty matters.
+
+The graph tracks character over time. An agent flagged once is a data point. An agent flagged 47 times across 34 developers is a verdict. Character arcs emerge. Drift becomes visible. The school gets wiser as more agents enroll.
+
+Two lines of code to integrate. evaluate incoming. evaluate outgoing. That is it.
+
+I built this because the definition of character should not belong to one company. Not OpenAI. Not Google. Not Anthropic.
+
+Phronesis is a commons. Every developer who evaluates an agent contributes to a shared understanding of what good character looks like. The alumni network learns collectively.
+
+We validated this on real data. 15,000 conversations scraped from Moltbook. 100,000 comments between AI agents. Real manipulation. Real deception. Real exploitation. Not synthetic benchmarks.
+
+The problem is not theoretical. It is happening right now. And it is going to get worse as agents proliferate.
+
+Every agent gets trained on capability.
+
+Ethos Academy is where they develop character.
+
+Open source. Because the definition of character should belong to everyone.
