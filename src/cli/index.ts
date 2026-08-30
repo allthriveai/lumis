@@ -344,13 +344,18 @@ function tidy(config: Config, args: Args): number {
 
   const lines = [`## Filing (${found.length})`, ""];
   for (const f of found) {
-    const risk = f.inboundLinks > 0
-      ? ` · ${f.inboundLinks} inbound link${f.inboundLinks === 1 ? "" : "s"} would break`
-      : f.ambiguousName
-        ? " · filename is shared, so bare links cannot be attributed"
-        : "";
-    lines.push(`- ${f.path} — ${f.reason}${risk}`);
-    lines.push(f.proposal ? `  → ${f.proposal}` : "  → no obvious destination");
+    // Both notes can apply at once: a file may have countable path-links AND a
+    // shared basename hiding more. Reporting only the count read as complete.
+    const notes: string[] = [];
+    if (f.inboundLinks > 0) {
+      notes.push(`${f.inboundLinks} inbound link${f.inboundLinks === 1 ? "" : "s"} would break`);
+    }
+    if (f.ambiguousName) notes.push("filename is shared, so the count is a floor, not a total");
+
+    lines.push(`- ${f.path} — ${f.reason}${notes.length ? ` · ${notes.join(" · ")}` : ""}`);
+    if (f.blockedBy) lines.push(`  → belongs at ${f.blockedBy}, but that already exists. Merge, do not move.`);
+    else if (f.proposal) lines.push(`  → ${f.proposal}`);
+    else lines.push("  → no obvious destination");
   }
   // Nothing above moved. Saying so is the point: a coach that quietly
   // reorganises a vault is not tidying it, and broken links are found weeks later.

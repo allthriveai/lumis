@@ -15,7 +15,7 @@
 // reorganising them is not tidying, it is trespassing.
 // ---------------------------------------------------------------------------
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative, basename, extname } from "node:path";
+import { join, relative, basename, extname, sep } from "node:path";
 import type { Config } from "../types.js";
 import { parseFrontmatter } from "../vault/frontmatter.js";
 import { normalizeDateKey } from "../vault/dates.js";
@@ -34,9 +34,16 @@ export interface Misfiled {
   reason: string;
   /** Vault-relative destination, or null when the right place is not obvious */
   proposal: string | null;
+  /**
+   * Set when something already sits where this file would go. The proposal is
+   * withheld in that case: following it would overwrite a real note.
+   */
+  blockedBy: string | null;
   inboundLinks: number;
   /** True when the filename is shared, so bare links cannot be attributed */
   ambiguousName: boolean;
+  /** True when the frontmatter could not be parsed, so the shape is a guess */
+  unreadable: boolean;
   empty: boolean;
 }
 
@@ -63,13 +70,25 @@ function buildLinkIndex(vaultPath: string): LinkIndex {
   const targets = new Map<string, number>();
   const basenameFiles = new Map<string, number>();
 
+  const add = (raw: string) => {
+    // Obsidian resolves links case-insensitively, so the index is lowercased.
+    const target = decodeURIComponent(raw.trim()).replace(/\.md$/i, "").toLowerCase();
+    if (target) targets.set(target, (targets.get(target) ?? 0) + 1);
+  };
+
   for (const file of walk(vaultPath)) {
-    const stem = basename(file, ".md");
+    const stem = basename(file, ".md").toLowerCase();
     basenameFiles.set(stem, (basenameFiles.get(stem) ?? 0) + 1);
-    for (const match of file.endsWith(".md") ? readFileSync(file, "utf-8").matchAll(/\[\[([^\]|#]+)/g) : []) {
-      const target = match[1]!.trim().replace(/\.md$/, "");
-      targets.set(target, (targets.get(target) ?? 0) + 1);
+
+    let text: string;
+    try {
+      text = readFileSync(file, "utf-8");
+    } catch {
+      continue;
     }
+    for (const m of text.matchAll(/\[\[([^\]|#]+)/g)) add(m[1]!);
+    // Markdown links break on a move exactly the same way wikilinks do.
+    for (const m of text.matchAll(/\]\(([^)\s]+\.md)(?:#[^)]*)?\)/g)) add(m[1]!);
   }
   return { targets, basenameFiles };
 }
@@ -83,14 +102,25 @@ function buildLinkIndex(vaultPath: string): LinkIndex {
  * scary number nobody can verify is worse than an honest "unknown".
  */
 function inboundLinks(index: LinkIndex, relPath: string): { count: number; ambiguous: boolean } {
-  const withoutExt = relPath.replace(/\.md$/, "");
-  const stem = basename(withoutExt);
+  const full = relPath.replace(/\.md$/i, "").toLowerCase().split(sep).join("/");
+  const stem = basename(full);
   const shared = (index.basenameFiles.get(stem) ?? 0) > 1;
 
   let count = 0;
   for (const [target, n] of index.targets) {
-    if (target === withoutExt || target.endsWith(`/${withoutExt}`)) count += n;
-    else if (!shared && target === stem) count += n;
+    if (target === full) {
+      count += n;
+      continue;
+    }
+    // Suffix matching is only for links that actually name a path
+    // ("Journal/2026-01-01"). Without that guard a bare [[Notes]] matched
+    // "raw phone/notes" through the suffix rule and slipped past the
+    // shared-name check entirely.
+    if (target.includes("/")) {
+      if (full.endsWith(`/${target}`) || target.endsWith(`/${full}`)) count += n;
+      continue;
+    }
+    if (!shared && target === stem) count += n;
   }
   return { count, ambiguous: shared };
 }
@@ -100,16 +130,27 @@ interface Shape {
   isMoment: boolean;
   date: string | null;
   empty: boolean;
+  unreadable: boolean;
 }
 
 function shapeOf(file: string): Shape {
-  const raw = readFileSync(file, "utf-8");
-  const { frontmatter, content } = parseFrontmatter<Record<string, unknown>>(raw);
+  const name = basename(file, ".md");
+  let raw: string;
+  let frontmatter: Record<string, unknown>;
+  let content: string;
+  try {
+    raw = readFileSync(file, "utf-8");
+    ({ frontmatter, content } = parseFrontmatter<Record<string, unknown>>(raw));
+  } catch {
+    // Broken YAML is most likely in exactly the files this module targets —
+    // scraps typed on a phone. One of them must not take out the whole report.
+    return { isDaily: DATE_NAME.test(name), isMoment: false, date: null, empty: false, unreadable: true };
+  }
   const tags = frontmatter["tags"];
   const list = Array.isArray(tags) ? tags.map(String) : typeof tags === "string" ? [tags] : [];
-  const name = basename(file, ".md");
 
   return {
+    unreadable: false,
     isDaily: list.includes("daily") || DATE_NAME.test(name) || /^##\s+Entry\s*$/m.test(content),
     isMoment: list.some((t) => t === "moment" || t.startsWith("moment/")) || "moment-type" in frontmatter,
     date: normalizeDateKey(frontmatter["date"]) ?? (DATE_NAME.test(name) ? name : null),
@@ -136,27 +177,52 @@ export function findMisfiled(config: Config): Misfiled[] {
 
     let proposal: string | null = null;
     if (shape.isMoment) proposal = join(config.paths.moments, name);
-    else if (shape.isDaily) {
-      proposal = shape.date
-        ? join(config.paths.dailyNotes, `${shape.date}.md`)
-        : join(config.paths.dailyNotes, name);
+    else if (shape.isDaily && shape.date) {
+      proposal = join(config.paths.dailyNotes, `${shape.date}.md`);
+    }
+    // A daily-shaped note with no date gets no proposal on purpose. Filing it
+    // under its own name would put it inside Life/Journal, where listDayKeys
+    // only reads YYYY-MM-DD files — invisible to every reader, and no longer
+    // flagged here either, because it now sits in the folder it belongs to.
+    // The move meant to end its invisibility would make it permanent.
+
+    if (shape.empty || shape.unreadable) proposal = null;
+
+    // Refuse a proposal that would land on top of an existing note. A phone
+    // scrap dated the same day as a real entry is the common case, and `mv`
+    // would destroy the day's actual writing.
+    let blockedBy: string | null = null;
+    if (proposal && existsSync(join(vault, proposal))) {
+      blockedBy = proposal;
+      proposal = null;
     }
 
     const inbound = inboundLinks(index, rel);
+    const notes = [reason];
+    if (shape.empty) notes.push("and it is empty");
+    if (shape.unreadable) notes.push("and its frontmatter will not parse");
+
     found.push({
       path: rel,
-      reason: shape.empty ? `${reason}, and it is empty` : reason,
-      proposal: shape.empty ? null : proposal,
+      reason: notes.join(", "),
+      proposal,
+      blockedBy,
       inboundLinks: inbound.count,
       ambiguousName: inbound.ambiguous,
+      unreadable: shape.unreadable,
       empty: shape.empty,
     });
   };
 
   // Loose notes at the vault root — where a phone note lands when no folder was picked
-  for (const name of readdirSync(vault)) {
-    if (extname(name) !== ".md" || ROOT_KEEP.has(name)) continue;
-    consider(join(vault, name), "sitting at the vault root");
+  if (existsSync(vault)) {
+    for (const name of readdirSync(vault)) {
+      if (extname(name) !== ".md" || ROOT_KEEP.has(name)) continue;
+      const full = join(vault, name);
+      // A directory can be named "Notes.md"; reading it throws EISDIR.
+      if (!statSync(full).isFile()) continue;
+      consider(full, "sitting at the vault root");
+    }
   }
 
   // The phone inbox: everything here is by definition waiting to be triaged
@@ -168,8 +234,10 @@ export function findMisfiled(config: Config): Misfiled[] {
   }
 
   // Inside Life/, a daily note outside the journal or a moment outside Moments
-  const daily = join(vault, config.paths.dailyNotes);
-  const moments = join(vault, config.paths.moments);
+  // Compare on a path boundary. A raw prefix made "Life/Journal Archive/" look
+  // like it was inside "Life/Journal" and silently dropped it from the scan.
+  const daily = join(vault, config.paths.dailyNotes) + sep;
+  const moments = join(vault, config.paths.moments) + sep;
   for (const file of walk(join(vault, "Life"))) {
     if (file.startsWith(daily) || file.startsWith(moments)) continue;
     if (basename(file) === "README.md") continue;
