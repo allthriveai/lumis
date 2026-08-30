@@ -1,7 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_PATHS } from "../config.js";
+import type { Config } from "../types.js";
 import {
   partitionByKan, scoredDays, kanTrend, parseSources, checkSources,
-  starvedNeeds, needCoverage, parseRubric, MIN_SCORED_DAYS,
+  starvedNeeds, needCoverage, parseRubric, intakeStatus, MIN_SCORED_DAYS,
 } from "./ikigai.js";
 import { parseDay } from "../vault/daily.js";
 import { shiftDateKey } from "../vault/dates.js";
@@ -218,5 +223,99 @@ describe("intake readiness", () => {
   it("stops at the next heading", () => {
     expect(parseRubric(RUBRIC).size).toBe(5);
     expect([...parseRubric(RUBRIC).values()].some((v) => v.includes("goal/build"))).toBe(false);
+  });
+});
+
+describe("the intake gate", () => {
+  let vault: string;
+  let config: Config;
+  const write = (rel: string, body: string) => {
+    const full = join(vault, rel);
+    mkdirSync(join(full, ".."), { recursive: true });
+    writeFileSync(full, body, "utf-8");
+  };
+
+  const ANCHORS = "## How I score ikigai-kan\n\n- 1 — the Tuesday\n- 2 — heads down\n- 3 — ordinary\n- 4 — the ride\n- 5 — the boat day\n";
+  const scoredVault = () => history("2026-08-30", 70, [1, 2, 3, 4, 5]);
+
+  beforeEach(() => {
+    vault = mkdtempSync(join(tmpdir(), "lumis-intake-"));
+    config = { vaultPath: vault, paths: { ...DEFAULT_PATHS } };
+    mkdirSync(join(vault, "Life/Reviews"), { recursive: true });
+  });
+  afterEach(() => rmSync(vault, { recursive: true, force: true }));
+
+  it("is not ready with no Ikigai.md at all", () => {
+    expect(intakeStatus(config, []).ready).toBe(false);
+  });
+
+  it("is not ready on the shipped template, whose placeholders are inert", () => {
+    // A live placeholder would report intake as done before a single real
+    // source had been named, and sit in the evidence report forever at 0 touches.
+    write("Lumis/Ikigai.md", readFileSync(join(process.cwd(), "templates/vault/Ikigai.md"), "utf-8"));
+    const status = intakeStatus(config, []);
+    expect(status.anchorsWritten).toBe(0);
+    expect(status.sourcesCheckable).toBe(0);
+    expect(status.ready).toBe(false);
+  });
+
+  it("is not ready on a partly anchored scale", () => {
+    write("Lumis/Ikigai.md", "## How I score ikigai-kan\n\n- 1 — a\n- 2 — b\n\n## Sources\n\n- Building #goal/build\n");
+    const status = intakeStatus(config, []);
+    expect(status.hasRubric).toBe(false);
+    expect(status.anchorsWritten).toBe(2);
+    expect(status.ready).toBe(false);
+  });
+
+  it("is not ready when no source can be checked", () => {
+    write("Lumis/Ikigai.md", `${ANCHORS}\n## Sources\n\n- Being a good friend\n`);
+    const status = intakeStatus(config, []);
+    expect(status.hasRubric).toBe(true);
+    expect(status.sourcesTotal).toBe(1);
+    expect(status.sourcesCheckable).toBe(0);
+    expect(status.ready).toBe(false);
+  });
+
+  it("is ready with five anchors and one checkable source", () => {
+    write("Lumis/Ikigai.md", `${ANCHORS}\n## Sources\n\n- Building #goal/build\n`);
+    expect(intakeStatus(config, []).ready).toBe(true);
+  });
+
+  it("withholds the partition while the scale is unanchored, however many days there are", () => {
+    // Announcing that the evidence pass cannot run and then running it anyway is
+    // worse than not having the check at all.
+    const p = partitionByKan(scoredVault(), false);
+    expect(p.scoredDayCount).toBe(70);
+    expect(p.insufficient).toBe(false);
+    expect(p.ungrounded).toBe(true);
+    expect(p.high).toEqual([]);
+    expect(p.low).toEqual([]);
+  });
+
+  it("runs the partition once the scale is anchored", () => {
+    const p = partitionByKan(scoredVault(), true);
+    expect(p.ungrounded).toBe(false);
+    expect(p.high).toHaveLength(7);
+  });
+
+  it("does not count a fenced or commented-out example as someone's scale", () => {
+    write("Lumis/Ikigai.md", "# Ikigai\n\n```md\n" + ANCHORS + "```\n\n## Sources\n\n- Building #goal/build\n");
+    expect(intakeStatus(config, []).anchorsWritten).toBe(0);
+
+    write("Lumis/Ikigai.md", `<!--\n${ANCHORS}-->\n\n## Sources\n\n- Building #goal/build\n`);
+    expect(intakeStatus(config, []).anchorsWritten).toBe(0);
+  });
+
+  it("accepts a plain numbered list, which is how people actually write a scale", () => {
+    write("Lumis/Ikigai.md", "## How I score ikigai-kan\n\n1. the Tuesday\n2. heads down\n3. ordinary\n4. the ride\n5. the boat day\n\n## Sources\n\n- Building #goal/build\n");
+    expect(intakeStatus(config, []).ready).toBe(true);
+  });
+
+  it("survives a directory named like a note on the daily path", () => {
+    // intakeStatus runs inside `lumis today`, which the check-in skill runs every
+    // morning. An unguarded read there took the whole command down.
+    mkdirSync(join(vault, "Life/Reviews/Ikigai 2026-Q1.md"));
+    mkdirSync(join(vault, "Lumis/Ikigai.md"), { recursive: true });
+    expect(() => intakeStatus(config, [])).not.toThrow();
   });
 });

@@ -44,7 +44,11 @@ touched it and compare your felt sense on those days against your baseline. A
 source with no tag is a claim that can never be wrong, which makes it useless
 here — and Lumis will tell you so rather than quietly skipping it.
 
+<!-- Replace this with a real one. Commented out on purpose: a placeholder that
+     counts would make Lumis report intake as done before you had named a single
+     source, and it would sit in the evidence report forever with zero touches.
 - Something you actually do #goal/example
+-->
 
 ## The seven needs
 

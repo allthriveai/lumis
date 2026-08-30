@@ -281,7 +281,8 @@ function ikigai(config: Config, args: Args): number {
   const { date } = args;
   const span = args.days ?? 90;
   const days = readDays(config, shiftDateKey(date, -(span - 1)), date);
-  const partition = partitionByKan(days);
+  const intakeReady = intakeStatus(config, days).ready;
+  const partition = partitionByKan(days, intakeReady);
   const sources = readSources(config);
   const evidence = checkSources(sources, days);
   const needs = readNeedHistory(config);
@@ -306,7 +307,18 @@ function ikigai(config: Config, args: Args): number {
     );
   }
 
-  if (partition.insufficient) {
+  if (partition.ungrounded) {
+    lines.push(
+      partition.scoredDayCount === 0
+        ? "No days carry a reading yet, and the scale they would be read against"
+        : `${partition.scoredDayCount} day${partition.scoredDayCount === 1 ? "" : "s"} carry a reading, but the scale`,
+      partition.scoredDayCount === 0
+        ? "has not been anchored either. The evidence pass stays closed until intake is done."
+        : "has not been anchored, so they cannot be compared to each other. The",
+      ...(partition.scoredDayCount === 0 ? [] : ["evidence pass stays closed until intake is done."]),
+      "",
+    );
+  } else if (partition.insufficient) {
     // Saying this plainly is the whole safety property. A confident reading off
     // a thin window is the failure this system is built to avoid.
     const short = partition.needed - partition.scoredDayCount;

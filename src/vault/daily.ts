@@ -101,7 +101,7 @@ export function carryForwardTasks(tasks: Task[], gapDays: number): Task[] {
  * reported as never read. Pasting a snippet without its closing fence is an
  * ordinary thing to do, so the open case has to degrade to plain text.
  */
-function fencedLines(lines: string[]): boolean[] {
+export function fencedLines(lines: string[]): boolean[] {
   const inFence = new Array<boolean>(lines.length).fill(false);
   let open: { at: number; marker: string } | null = null;
 
@@ -120,6 +120,31 @@ function fencedLines(lines: string[]): boolean[] {
     }
   }
   return inFence;
+}
+
+/**
+ * Which lines sit inside an HTML comment.
+ *
+ * Parallel to fencedLines. Commenting a line out is how a vault parks something
+ * without losing it — Goals.md does it for targets — so a parser that ignores
+ * comments reads parked entries as live.
+ */
+export function commentedLines(lines: string[]): boolean[] {
+  const out = new Array<boolean>(lines.length).fill(false);
+  let open = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (open) {
+      out[i] = true;
+      if (line.includes("-->")) open = false;
+      continue;
+    }
+    const start = line.indexOf("<!--");
+    if (start === -1) continue;
+    out[i] = true;
+    open = !line.includes("-->", start);
+  }
+  return out;
 }
 
 /**

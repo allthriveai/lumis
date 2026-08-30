@@ -11,13 +11,13 @@
 // module hands it. A model that proposes your purpose is a model you cannot
 // check.
 // ---------------------------------------------------------------------------
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Config, Day, Need } from "../types.js";
 import { SEVEN_NEEDS } from "../types.js";
 import { vaultPath } from "../config.js";
 import { parseFrontmatter } from "../vault/frontmatter.js";
-import { goalTags } from "../vault/daily.js";
+import { goalTags, fencedLines, commentedLines } from "../vault/daily.js";
 import { daysBetween, todayKey } from "../vault/dates.js";
 
 /**
@@ -71,6 +71,13 @@ export function kanTrend(
 export interface Partition {
   /** True when there is not enough scored history to say anything */
   insufficient: boolean;
+  /**
+   * True when the 1-5 scale has not been anchored, so the readings are not
+   * comparable to each other. The partition is withheld either way — announcing
+   * that the evidence pass cannot run and then running it is worse than not
+   * having the check at all.
+   */
+  ungrounded: boolean;
   scoredDayCount: number;
   needed: number;
   baseline: number | null;
@@ -86,11 +93,12 @@ export interface Partition {
  * sets of days and saying what differs is the half a model is actually good at;
  * deciding which days to read is the half it is not.
  */
-export function partitionByKan(days: Day[]): Partition {
+export function partitionByKan(days: Day[], grounded = true): Partition {
   const scored = scoredDays(days);
   const values = scored.map((s) => s.value);
   const base: Partition = {
     insufficient: scored.length < MIN_SCORED_DAYS,
+    ungrounded: !grounded,
     scoredDayCount: scored.length,
     needed: MIN_SCORED_DAYS,
     baseline: mean(values),
@@ -98,7 +106,7 @@ export function partitionByKan(days: Day[]): Partition {
     low: [],
   };
 
-  if (base.insufficient) return base;
+  if (base.insufficient || base.ungrounded) return base;
 
   const size = Math.max(MIN_GROUP, Math.ceil(scored.length / 10));
   const byValue = [...scored].sort((a, b) => a.value - b.value || a.dateKey.localeCompare(b.dateKey));
@@ -118,23 +126,27 @@ export interface Source {
   goal: string | null;
 }
 
-const SOURCES_HEADING = /^##\s+Sources\s*$/im;
+const SOURCES_HEADING = /^##\s+Sources\s*$/i;
 
 /** Read the Sources list out of Ikigai.md */
 export function parseSources(markdown: string): Source[] {
-  const start = markdown.search(SOURCES_HEADING);
+  const lines = markdown.split("\n");
+  const fenced = fencedLines(lines);
+  const commented = commentedLines(lines);
+  const start = lines.findIndex((line, i) => !fenced[i] && !commented[i] && SOURCES_HEADING.test(line));
   if (start === -1) return [];
-  const rest = markdown.slice(start).split("\n").slice(1).join("\n");
-  const body = rest.split(/^## /m)[0] ?? "";
 
-  return body
-    .split("\n")
-    .map((line) => line.match(/^\s*[-*]\s+(.*\S)\s*$/)?.[1])
-    .filter((t): t is string => !!t)
-    .map((text) => ({ text, goal: goalTags(text)[0] ?? null }));
+  const out: Source[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (fenced[i] || commented[i]) continue;
+    if (/^##\s/.test(lines[i]!)) break;
+    const text = lines[i]!.match(/^\s*[-*+]\s+(.*\S)\s*$/)?.[1];
+    if (text) out.push({ text, goal: goalTags(text)[0] ?? null });
+  }
+  return out;
 }
 
-const RUBRIC_HEADING = /^##\s+How I score ikigai-kan\s*$/im;
+const RUBRIC_HEADING = /^##\s+How I score ikigai-kan\s*$/i;
 
 /**
  * The 1-5 anchors, read out of Ikigai.md.
@@ -145,14 +157,30 @@ const RUBRIC_HEADING = /^##\s+How I score ikigai-kan\s*$/im;
  * anchored to remembered days is reproducible; one anchored to adjectives
  * ("good", "fine") is not.
  */
+/**
+ * One anchor line. Accepts the ways people actually write a 1-5 scale:
+ * "- 1 — text", "1. text", "1) text", "**1** - text", "1 = text", and the
+ * Unicode minus. A plain numbered list is the most natural form of all and used
+ * to parse as zero anchors, which read as "you have not done the work" to
+ * someone who had.
+ */
+const ANCHOR = /^\s*(?:[-*+]\s+)?[*_]{0,2}([1-5])[*_]{0,2}\s*[—–\-−=:.)]\s+(.*\S)\s*$/;
+
 export function parseRubric(markdown: string): Map<number, string> {
   const anchors = new Map<number, string>();
-  const start = markdown.search(RUBRIC_HEADING);
+  const lines = markdown.split("\n");
+  const fenced = fencedLines(lines);
+  const commented = commentedLines(lines);
+
+  // A fenced or commented-out example is not someone's scale. Same class as the
+  // fence bug in daily.ts: without this, a documented example reads as anchored.
+  const start = lines.findIndex((line, i) => !fenced[i] && !commented[i] && RUBRIC_HEADING.test(line));
   if (start === -1) return anchors;
 
-  const body = markdown.slice(start).split("\n").slice(1).join("\n").split(/^## /m)[0] ?? "";
-  for (const line of body.split("\n")) {
-    const match = line.match(/^\s*[-*]?\s*\**([1-5])\**\s*[—–:-]\s*(.*\S)\s*$/);
+  for (let i = start + 1; i < lines.length; i++) {
+    if (fenced[i] || commented[i]) continue;
+    if (/^##\s/.test(lines[i]!)) break;
+    const match = lines[i]!.match(ANCHOR);
     if (match) anchors.set(Number(match[1]), match[2]!);
   }
   return anchors;
@@ -174,28 +202,48 @@ export interface IntakeStatus {
 }
 
 export function intakeStatus(config: Config, days: Day[]): IntakeStatus {
-  const path = vaultPath(config, "ikigai");
-  const markdown = existsSync(path) ? readFileSync(path, "utf-8") : "";
+  const markdown = readIfFile(vaultPath(config, "ikigai"));
   const rubric = parseRubric(markdown);
   const sources = parseSources(markdown);
   const quarters = readNeedHistory(config).filter((q) => Object.keys(q.scores).length > 0);
   const scored = scoredDays(days).length;
 
+  // Derived once. Computing `rubric.size === 5` separately for hasRubric and
+  // for ready meant the two could drift apart, and a mutation to one left the
+  // other — and every test — untouched.
+  const hasRubric = rubric.size === 5;
+  const sourcesCheckable = sources.filter((s) => s.goal).length;
+
   return {
-    hasRubric: rubric.size === 5,
+    hasRubric,
     anchorsWritten: rubric.size,
     sourcesTotal: sources.length,
-    sourcesCheckable: sources.filter((s) => s.goal).length,
+    sourcesCheckable,
     quartersScored: quarters.length,
     scoredDays: scored,
     daysUntilEvidence: Math.max(0, MIN_SCORED_DAYS - scored),
-    ready: rubric.size === 5 && sources.filter((s) => s.goal).length > 0,
+    ready: hasRubric && sourcesCheckable > 0,
   };
 }
 
 export function readSources(config: Config): Source[] {
-  const path = vaultPath(config, "ikigai");
-  return existsSync(path) ? parseSources(readFileSync(path, "utf-8")) : [];
+  return parseSources(readIfFile(vaultPath(config, "ikigai")));
+}
+
+/**
+ * Read a vault file, or "" if it is missing or unreadable.
+ *
+ * intakeStatus put Ikigai.md and every Life/Reviews file on the `today` path,
+ * which the check-in skill runs every morning. A directory named like a note
+ * threw EISDIR and took the command down — the untrusted-input rule arriving
+ * one commit late again.
+ */
+function readIfFile(path: string): string {
+  try {
+    return statSync(path).isFile() ? readFileSync(path, "utf-8") : "";
+  } catch {
+    return "";
+  }
 }
 
 export interface SourceEvidence {
@@ -272,9 +320,7 @@ export function readNeedHistory(config: Config): NeedScores[] {
     .map((file) => ({ file, match: file.match(QUARTER_FILE) }))
     .filter((f): f is { file: string; match: RegExpMatchArray } => f.match !== null)
     .map(({ file, match }) => {
-      const { frontmatter } = parseFrontmatter<Record<string, unknown>>(
-        readFileSync(join(dir, file), "utf-8"),
-      );
+      const { frontmatter } = parseFrontmatter<Record<string, unknown>>(readIfFile(join(dir, file)));
       const scores: Partial<Record<Need, number>> = {};
       for (const need of SEVEN_NEEDS) {
         const raw = frontmatter[need];
