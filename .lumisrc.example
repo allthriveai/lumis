@@ -1,0 +1,16 @@
+{
+  "//": "Copy to .lumisrc and edit. This file is gitignored: your vault location never enters the repo.",
+
+  "vaultPath": "/Users/you/path/to/second-brain",
+
+  "paths": {
+    "dailyNotes": "Life/Journal",
+    "dailyNoteFormat": "YYYY-MM-DD",
+    "moments": "Life/Moments",
+    "reviews": "Life/Reviews",
+    "templates": "Templates",
+    "goals": "Lumis/Goals.md",
+    "ikigai": "Lumis/Ikigai.md",
+    "voice": "Lumis/Voice.md"
+  }
+}

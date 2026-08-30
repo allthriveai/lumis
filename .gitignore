@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Vault location and anything derived from it
+.lumisrc
+.env
+
+# Local name patterns for tools/check-personal.mjs
+.personal-patterns
+
+.DS_Store

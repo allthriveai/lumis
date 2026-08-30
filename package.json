@@ -1,0 +1,55 @@
+{
+  "name": "lumis",
+  "version": "0.1.0",
+  "description": "An AI life coach that lives in your Obsidian vault. Journaling, habits, and purpose work grounded in what you actually wrote.",
+  "type": "module",
+  "bin": {
+    "lumis": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    ".claude/skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "check:personal": "node tools/check-personal.mjs",
+    "check:vault": "tsx src/cli/index.ts check-vault",
+    "prepublishOnly": "npm run check:personal && npm run lint && npm test",
+    "prepare": "git config core.hooksPath .githooks || true"
+  },
+  "keywords": [
+    "obsidian",
+    "life-coach",
+    "journaling",
+    "habits",
+    "ikigai",
+    "second-brain",
+    "claude"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allierays/lumis.git"
+  },
+  "homepage": "https://github.com/allierays/lumis#readme",
+  "author": "Allie Jones (https://github.com/allierays)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
