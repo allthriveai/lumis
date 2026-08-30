@@ -60,7 +60,7 @@ for s in journal check-in review ikigai; do ln -s "$PWD/.claude/skills/$s" ~/.cl
 |---|---|---|
 | `/journal` | any time | free-hand writing, captured verbatim. Says nothing back |
 | `/check-in` | daily | receipt, entry, five-second moment, reflection — in that order |
-| `/review` | weekly | what you said you'd do vs what you did, then next week's WOOP |
+| `/review` | weekly | reads notes you wrote alone, what slipped, filing, next week's WOOP |
 | `/ikigai` | quarterly | the seven needs, and what your high days have in common |
 
 `/journal` and `/check-in` are deliberately separate. Capture and coaching are
@@ -77,6 +77,7 @@ lumis today                  # where you are; creates nothing
 lumis today --append-stdin   # capture free-hand writing from stdin
 lumis week
 lumis ikigai
+lumis tidy                   # notes that look filed in the wrong place
 lumis check-vault
 ```
 

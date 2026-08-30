@@ -19,6 +19,7 @@ import { todayKey, shiftDateKey, daysBetween } from "../vault/dates.js";
 import { readGoals, cadenceStatus, stampFromDay, formatCadence } from "../coach/targets.js";
 import { buildReceipt, describeGap } from "../coach/receipt.js";
 import { computeDrift, DEFAULT_WINDOW_DAYS } from "../coach/drift.js";
+import { findMisfiled } from "../coach/filing.js";
 import {
   partitionByKan, kanTrend, readSources, checkSources, readNeedHistory, starvedNeeds,
   MIN_SCORED_DAYS,
@@ -30,6 +31,7 @@ const HELP = `lumis — an AI life coach that lives in your Obsidian vault
   lumis today --append-stdin      append free-hand writing read from stdin
   lumis week [--weeks N]          the week's numbers, drift, and targets
   lumis ikigai [--days N]         felt-sense evidence and the seven needs
+  lumis tidy                      notes that look filed in the wrong place
   lumis check-vault               verify every configured path exists
 
   --json    print the numbers as JSON as well as the display block
@@ -332,6 +334,32 @@ function ikigai(config: Config, args: Args): number {
 
 // ---------------------------------------------------------------------------
 
+function tidy(config: Config, args: Args): number {
+  const found = findMisfiled(config);
+
+  if (found.length === 0) {
+    emit("Nothing looks misfiled.", { misfiled: [] }, args.json);
+    return 0;
+  }
+
+  const lines = [`## Filing (${found.length})`, ""];
+  for (const f of found) {
+    const risk = f.inboundLinks > 0
+      ? ` · ${f.inboundLinks} inbound link${f.inboundLinks === 1 ? "" : "s"} would break`
+      : f.ambiguousName
+        ? " · filename is shared, so bare links cannot be attributed"
+        : "";
+    lines.push(`- ${f.path} — ${f.reason}${risk}`);
+    lines.push(f.proposal ? `  → ${f.proposal}` : "  → no obvious destination");
+  }
+  // Nothing above moved. Saying so is the point: a coach that quietly
+  // reorganises a vault is not tidying it, and broken links are found weeks later.
+  lines.push("", "Nothing was moved. These are proposals.");
+
+  emit(lines.join("\n"), { misfiled: found }, args.json);
+  return 0;
+}
+
 function main(): number {
   const args = parseArgs(process.argv.slice(2));
 
@@ -353,6 +381,7 @@ function main(): number {
     case "today": return today(config, args);
     case "week": return week(config, args);
     case "ikigai": return ikigai(config, args);
+    case "tidy": return tidy(config, args);
     default:
       process.stderr.write(`Unknown command: ${args.command}\n\n${HELP}`);
       return 1;

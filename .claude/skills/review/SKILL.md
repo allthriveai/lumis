@@ -83,7 +83,36 @@ Do not interpret a one-week move. Two points is not a trend, and saying it is
 teaches them to distrust the number. If the trend has held for several weeks,
 say so and name the weeks.
 
-## 6. Next week — WOOP
+## 6. Filing
+
+```
+lumis tidy --json
+```
+
+Notes that look filed in the wrong place — usually a phone note that landed at
+the vault root because no folder was picked, or something still sitting in
+`Raw phone/`.
+
+**Nothing here has been moved, and you do not move anything without being told
+to, file by file.** Show the list with each proposed destination and ask. Moving
+a note by shell breaks every `[[wikilink]]` pointing at it, because Obsidian
+only rewrites links when Obsidian performs the move.
+
+Read `inboundLinks` out loud before moving anything with a non-zero count, and
+say what will break. If `ambiguousName` is true, the filename is shared and bare
+links cannot be attributed — say the count is a floor, not a total, rather than
+presenting it as complete.
+
+A `proposal` of null means the destination is not obvious. Do not invent one.
+Ask what it is, or leave it where it is — a note in the wrong folder costs
+almost nothing, and a note moved somewhere wrong is lost.
+
+Empty notes get reported with no proposal. Offer to delete them; they are
+usually a scaffold nobody wrote in.
+
+Once a file is moved, update any links that named it by path.
+
+## 7. Next week — WOOP
 
 Set exactly one WOOP. Not three.
 
