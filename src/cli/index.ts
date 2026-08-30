@@ -186,6 +186,14 @@ function week(config: Config, args: Args): number {
   const done = inWeek.flatMap((d) => d.tasks.filter((t) => t.done));
   const open = inWeek.flatMap((d) => d.tasks.filter((t) => !t.done));
 
+  // Notes written straight into Obsidian — usually on the phone — that have
+  // never been through a check-in. Detected by reading files: words under
+  // Entry, nothing under the five-second moment. No cursor, no sync state, so
+  // nothing to fall out of step with a vault edited on two devices.
+  const unread = unanalyzedDays(config).filter((d) => d.dateKey <= date);
+  const unreadThisWeek = unread.filter((d) => d.dateKey >= from);
+  const unreadOlder = unread.filter((d) => d.dateKey < from);
+
   const lines = [
     `## The week of ${from} to ${date}`,
     "",
@@ -215,6 +223,18 @@ function week(config: Config, args: Args): number {
     lines.push("");
   }
 
+  if (unreadThisWeek.length) {
+    lines.push(`Never read (${unreadThisWeek.length}):`);
+    for (const d of unreadThisWeek) {
+      const words = d.entry.split(/\s+/).filter(Boolean).length;
+      lines.push(`- ${d.dateKey} — ${words} words`);
+    }
+    if (unreadOlder.length) {
+      lines.push(`plus ${unreadOlder.length} older: ${unreadOlder.map((d) => d.dateKey).join(", ")}`);
+    }
+    lines.push("");
+  }
+
   const moments = inWeek.filter((d) => d.moment.length > 0);
   if (moments.length) {
     lines.push(`Five-second moments (${moments.length}):`);
@@ -227,7 +247,13 @@ function week(config: Config, args: Args): number {
   }
 
   const display = lines.join("\n").trimEnd() + "\n";
-  emit(display, { from, to: date, display, drift, trend, milestones, days: inWeek.map((d) => d.dateKey) }, args.json);
+  emit(display, {
+    from, to: date, display, drift, trend, milestones,
+    days: inWeek.map((d) => d.dateKey),
+    // Full text, so the skill can read them rather than being told about them.
+    unread: unreadThisWeek.map((d) => ({ date: d.dateKey, path: d.path, entry: d.entry })),
+    unreadOlder: unreadOlder.map((d) => ({ date: d.dateKey, path: d.path })),
+  }, args.json);
   return 0;
 }
 

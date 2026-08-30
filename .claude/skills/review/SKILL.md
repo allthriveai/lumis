@@ -40,7 +40,34 @@ reached is a floor set too high, and that is a fixable thing.
 Also check `when:` — the implementation intention. A target with no time and no
 place attached is a wish. Offer to add one.
 
-## 3. The week read back
+## 3. The notes you wrote alone
+
+`unread` holds every entry from this week that has never been through a
+check-in — typically written straight into Obsidian on the phone. Each carries
+its full text, so **read them properly**. This is the part of the review that
+only exists because you were not there when they were written.
+
+Then look across them for patterns, under one rule: **a pattern spans at least
+two notes.** One note saying something is that note saying something. Two notes
+saying it is worth raising, and you cite both:
+
+> On 08-26 you wrote about the post not being ready, and on 08-29 about it still
+> not being ready. Both times you were about to send it.
+
+Cite `file:date` on every observation. Report what recurs — a person, a place, a
+time of day, a phrase, a thing that keeps almost happening — and then ask them
+what they make of it. Do not tell them what it means. They wrote it; they have
+context you do not, and the honest reading is theirs.
+
+If `unreadOlder` is non-empty, say how many and offer to go further back. Do not
+silently read a month of writing because it was there.
+
+Then offer, once, to capture a five-second moment for each of those days — one
+or two sentences each, quickly. That is Homework for Life done late, and it is
+also what stops them surfacing as unread every week. If they decline, say
+plainly that these will come up again next week, and leave it.
+
+## 4. The week read back
 
 Read their five-second moments back to them, in order, as a list. No commentary.
 
@@ -48,7 +75,7 @@ This is the highest-value thirty seconds in the review and it is entirely
 mechanical. A week of moments read in sequence shows a shape that no single day
 shows, and they will see it before you do. Let them.
 
-## 4. The felt sense
+## 5. The felt sense
 
 `trend` has the mean ikigai-kan for the week and the week before. Report both.
 
@@ -56,7 +83,7 @@ Do not interpret a one-week move. Two points is not a trend, and saying it is
 teaches them to distrust the number. If the trend has held for several weeks,
 say so and name the weeks.
 
-## 5. Next week — WOOP
+## 6. Next week — WOOP
 
 Set exactly one WOOP. Not three.
 

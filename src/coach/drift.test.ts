@@ -58,3 +58,31 @@ describe("computeDrift", () => {
     expect(twoMisses.behind).toHaveLength(0);
   });
 });
+
+describe("finding notes written outside Lumis", () => {
+  // The phone writes straight into Obsidian, so the only reliable marker is the
+  // file itself: words under Entry, nothing under the five-second moment.
+  const withMoment = (d: string) =>
+    parseDay(d, "x", `---\ndate: ${d}\n---\n\n## Entry\n\nwords\n\n## The five-second moment\n\nsomething\n`);
+  const phoneWritten = (d: string) =>
+    parseDay(d, "x", `---\ndate: ${d}\n---\n\n## Entry\n\ntyped on the phone\n\n## The five-second moment\n`);
+  const scaffold = (d: string) =>
+    parseDay(d, "x", `---\ndate: ${d}\n---\n\n## Entry\n\n## The five-second moment\n`);
+
+  const unread = (days: ReturnType<typeof withMoment>[]) =>
+    days.filter((d) => d.entry.length > 0 && d.moment.length === 0).map((d) => d.dateKey);
+
+  it("finds a phone note and ignores one already checked in", () => {
+    expect(unread([withMoment("2026-08-26"), phoneWritten("2026-08-27")])).toEqual(["2026-08-27"]);
+  });
+
+  it("does not surface an empty scaffold as something to read", () => {
+    expect(unread([scaffold("2026-08-28")])).toEqual([]);
+  });
+
+  it("stops surfacing a note once its moment is filled in", () => {
+    const before = phoneWritten("2026-08-27");
+    expect(unread([before])).toEqual(["2026-08-27"]);
+    expect(unread([withMoment("2026-08-27")])).toEqual([]);
+  });
+});
