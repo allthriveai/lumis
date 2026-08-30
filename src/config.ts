@@ -43,7 +43,11 @@ function readRc(): { path: string; data: Partial<Config> } | null {
 
 export function loadConfig(overrides?: Partial<Config>): Config {
   const rc = readRc();
-  const vaultPath = overrides?.vaultPath ?? rc?.data.vaultPath ?? process.env.LUMIS_VAULT ?? "";
+  // LUMIS_VAULT beats .lumisrc on purpose. Setting an environment variable is a
+  // deliberate act; a config file two directories up is ambient. Without this,
+  // a ~/.lumisrc silently captured every run and there was no way to point the
+  // tool at a different vault — including a fixture one.
+  const vaultPath = overrides?.vaultPath ?? process.env.LUMIS_VAULT ?? rc?.data.vaultPath ?? "";
 
   if (!vaultPath) {
     throw new Error(

@@ -155,3 +155,28 @@ describe("sectionBody", () => {
     expect(sectionBody(NOTE, "## Nope")).toBe("");
   });
 });
+
+describe("free-hand capture must not alter what was written", () => {
+  it("preserves apostrophes, quotes, blank lines and indentation", () => {
+    const raw = "It's 6am and I can't settle.\n\nShe said \"just start\" and I didn't.\n\n  — trailing thought";
+    const out = insertUnder("---\nd: 1\n---\n\n## Entry\n\n## The five-second moment\n", ENTRY_HEADING, raw);
+    expect(out).toContain("It's 6am and I can't settle.");
+    expect(out).toContain('She said "just start" and I didn\'t.');
+    expect(out).toContain("  — trailing thought");
+  });
+
+  it("appends a second dump without eating the first", () => {
+    const one = insertUnder("## Entry\n", ENTRY_HEADING, "First dump.");
+    const two = insertUnder(one, ENTRY_HEADING, "Later. Still circling.");
+    expect(two).toContain("First dump.");
+    expect(two).toContain("Later. Still circling.");
+    expect(two.indexOf("First dump.")).toBeLessThan(two.indexOf("Later."));
+  });
+
+  it("keeps free-hand writing above the moment heading", () => {
+    const note = "## Entry\n\n## The five-second moment\n\nthe moment\n";
+    const out = insertUnder(note, ENTRY_HEADING, "a long dump");
+    expect(out.indexOf("a long dump")).toBeLessThan(out.indexOf("## The five-second moment"));
+    expect(out).toContain("the moment");
+  });
+});

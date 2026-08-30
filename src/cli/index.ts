@@ -7,7 +7,7 @@
 // here writes to the vault except `today --append`, and nothing here ever
 // creates an empty note: looking at where you are must not change where you are.
 // ---------------------------------------------------------------------------
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 import { loadConfig, vaultPath, DEFAULT_PATHS } from "../config.js";
 import type { Config, VaultPaths } from "../types.js";
 import { SEVEN_NEEDS } from "../types.js";
@@ -27,6 +27,7 @@ import {
 const HELP = `lumis — an AI life coach that lives in your Obsidian vault
 
   lumis today [--append <text>]   where you are, and the day's carried tasks
+  lumis today --append-stdin      append free-hand writing read from stdin
   lumis week [--weeks N]          the week's numbers, drift, and targets
   lumis ikigai [--days N]         felt-sense evidence and the seven needs
   lumis check-vault               verify every configured path exists
@@ -42,6 +43,7 @@ interface Args {
   json: boolean;
   date: string;
   append: string | null;
+  appendStdin: boolean;
   days: number | null;
   weeks: number;
 }
@@ -58,6 +60,7 @@ function parseArgs(argv: string[]): Args {
     json: argv.includes("--json"),
     date: flag("date") ?? todayKey(),
     append: flag("append"),
+    appendStdin: argv.includes("--append-stdin"),
     days: days ? Number(days) : null,
     weeks: weeks ? Number(weeks) : 1,
   };
@@ -98,14 +101,27 @@ function checkVault(config: Config): number {
 
 // ---------------------------------------------------------------------------
 
+function readStdin(): string {
+  // Free-hand writing arrives with newlines, apostrophes and quotes in it.
+  // Passing that through a shell argument mangles it or breaks the call, and
+  // the one thing capture must never do is alter what was written.
+  try {
+    return readFileSync(0, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
 function today(config: Config, args: Args): number {
   const { date } = args;
+  const text = args.appendStdin ? readStdin() : args.append;
 
-  if (args.append) {
-    const path = appendToEntry(config, date, args.append);
+  if (text) {
+    const path = appendToEntry(config, date, text);
     const day = readDay(config, date);
     const stamp = day ? stampFromDay(config, day, date) : null;
-    const lines = [`Appended to ${path}`];
+    const words = text.split(/\s+/).filter(Boolean).length;
+    const lines = [`Saved to ${path} — ${words} word${words === 1 ? "" : "s"}.`];
     if (stamp?.stamped.length) lines.push(`Stamped: ${stamp.stamped.join(", ")}`);
     if (stamp?.ambiguous.length) {
       lines.push(

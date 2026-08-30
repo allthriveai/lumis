@@ -1,6 +1,6 @@
 ---
 name: check-in
-description: The daily Lumis check-in. Use when the user says "check in", "let's journal", "start my day", "close out the day", "daily", or asks to write today's entry. Opens with where they stand, takes the entry, asks for the five-second moment, then reflects.
+description: The structured daily Lumis check-in. Use when the user says "check in", "start my day", "close out the day", "daily", or wants to be read back to and reflected with. Opens with where they stand, takes or reads the entry, asks for the five-second moment, then reflects. For long free-hand writing with no response, use journal instead.
 ---
 
 # Check-in
@@ -28,13 +28,23 @@ silently skip them and do not do them first.
 
 ## 2. The entry
 
-Ask what happened. One open question, then stop and wait.
+If they already wrote free-hand today — `/journal` puts it under `## Entry` —
+do not ask them to write it again. Read what is there and move to step 3.
+
+Otherwise ask what happened. One open question, then stop and wait.
 
 When they answer, write it down exactly:
 
 ```
-lumis today --append "<their words>"
+lumis today --append-stdin <<'ENTRY'
+<their words, verbatim>
+ENTRY
 ```
+
+If they start writing at length rather than answering, stop coaching and hand
+off: say `/journal` is the place for that and let them go. A structured
+check-in interrupting a brain dump ruins the dump, and the coach interjecting
+mid-flow is exactly what free-hand writing is supposed to be free of.
 
 **Never edit the entry.** No tidying, no tightening, no humanizer, no fixing
 grammar, no turning fragments into sentences. It is theirs. If they wrote three

@@ -51,21 +51,30 @@ the working directory.
 Then make the skills available from inside your vault:
 
 ```sh
-for s in check-in review ikigai; do ln -s "$PWD/.claude/skills/$s" ~/.claude/skills/$s; done
+for s in journal check-in review ikigai; do ln -s "$PWD/.claude/skills/$s" ~/.claude/skills/$s; done
 ```
 
 ## The loop
 
 | | When | What |
 |---|---|---|
+| `/journal` | any time | free-hand writing, captured verbatim. Says nothing back |
 | `/check-in` | daily | receipt, entry, five-second moment, reflection — in that order |
 | `/review` | weekly | what you said you'd do vs what you did, then next week's WOOP |
 | `/ikigai` | quarterly | the seven needs, and what your high days have in common |
 
+`/journal` and `/check-in` are deliberately separate. Capture and coaching are
+different activities, and doing them at once ruins the first: morning pages work
+because nothing is reading over your shoulder, so `/journal` writes what you
+give it and replies with a word count. `/check-in` is where the coach is
+actually in the room. Everything `/journal` captures lands under `## Entry`,
+which is what `/check-in` and `/review` read.
+
 The CLI underneath, if you want it directly:
 
 ```sh
-lumis today          # where you are; creates nothing
+lumis today                  # where you are; creates nothing
+lumis today --append-stdin   # capture free-hand writing from stdin
 lumis week
 lumis ikigai
 lumis check-vault
