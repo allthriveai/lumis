@@ -10,12 +10,26 @@
 //     mid-evening in the Americas and files work under tomorrow.
 // ---------------------------------------------------------------------------
 
-/** Parse a YYYY-MM-DD key into a Date at local midnight. Throws on a malformed key. */
+/**
+ * Parse a YYYY-MM-DD key into a Date at local midnight.
+ *
+ * Throws on a malformed key AND on an impossible one. Shape-checking alone let
+ * 2026-09-31 roll over to October 1st and 2026-13-01 to January 2027, so a typo
+ * silently wrote the day's entry into an unrelated note.
+ */
 export function parseDateKey(key: string): Date {
   const match = key.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) throw new Error(`Not a YYYY-MM-DD date key: ${key}`);
   const [, y, m, d] = match as unknown as [string, string, string, string];
-  return new Date(Number(y), Number(m) - 1, Number(d));
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  if (
+    date.getFullYear() !== Number(y) ||
+    date.getMonth() !== Number(m) - 1 ||
+    date.getDate() !== Number(d)
+  ) {
+    throw new Error(`No such date: ${key}`);
+  }
+  return date;
 }
 
 /** Format a Date as a YYYY-MM-DD key in local time */

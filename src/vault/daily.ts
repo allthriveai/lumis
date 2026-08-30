@@ -82,17 +82,96 @@ export function carryForwardTasks(tasks: Task[], gapDays: number): Task[] {
   return tasks.filter((t) => !t.done).map((t) => ({ ...t, movedDays: t.movedDays + gap }));
 }
 
+// ---------------------------------------------------------------------------
+// Section handling
+//
+// Everything here is line-based and fence-aware. The earlier substring version
+// did real damage: "## Entry" matched inside "## Entry — morning" and rewrote
+// the heading, and any "## " the user typed in their own writing — or inside a
+// fenced code block — was treated as the start of the next section, so a second
+// capture landed above the first and silently reordered the journal.
+// ---------------------------------------------------------------------------
+
+/** Which lines sit inside a fenced code block, where "## " is not a heading */
+function fencedLines(lines: string[]): boolean[] {
+  const inFence: boolean[] = [];
+  let fence: string | null = null;
+  for (const line of lines) {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
+    if (fence === null && marker) {
+      fence = marker[0]!;
+      inFence.push(true);
+      continue;
+    }
+    if (fence !== null && marker && marker[0] === fence) {
+      fence = null;
+      inFence.push(true);
+      continue;
+    }
+    inFence.push(fence !== null);
+  }
+  return inFence;
+}
+
+/**
+ * Index of the line holding this heading, or -1.
+ *
+ * Matches the whole line, so "## Entry" never matches "## Entrypoints". Falls
+ * back to a heading that starts with the same word ("## Entry — morning") and
+ * returns THAT line, so the user's own heading text is used as-is rather than
+ * being overwritten with the canonical form.
+ */
+export function findHeading(lines: string[], heading: string): number {
+  const fenced = fencedLines(lines);
+  const want = heading.trim();
+  const loose = new RegExp(`^${want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+
+  let fallback = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    const line = lines[i]!.trimEnd();
+    if (line === want) return i;
+    if (fallback === -1 && loose.test(line)) fallback = i;
+  }
+  return fallback;
+}
+
+/**
+ * The headings Lumis owns. Only these end a section.
+ *
+ * A "## " the writer typed inside their own entry is their content, not a
+ * structural boundary — treating it as one put a later capture ABOVE the
+ * earlier writing and silently reordered the day.
+ */
+const OWNED_HEADINGS = [/^##\s+Entry\b/i, /^##\s+The\s+five-second\s+moment\b/i];
+
+function isOwnedHeading(line: string): boolean {
+  return OWNED_HEADINGS.some((re) => re.test(line));
+}
+
+/** Index of the next heading Lumis owns after `from`, or lines.length */
+function nextHeading(lines: string[], from: number): number {
+  const fenced = fencedLines(lines);
+  for (let i = from + 1; i < lines.length; i++) {
+    if (!fenced[i] && isOwnedHeading(lines[i]!)) return i;
+  }
+  return lines.length;
+}
+
 /** The body under a "## " heading, up to the next one. Empty when absent. */
 export function sectionBody(content: string, heading: string | RegExp): string {
-  const match = typeof heading === "string" ? content.indexOf(heading) : content.search(heading);
-  if (match === -1) return "";
-  const headingLength =
-    typeof heading === "string"
-      ? heading.length
-      : (content.slice(match).match(/^.*$/m)?.[0].length ?? 0);
-  const rest = content.slice(match + headingLength);
-  const next = rest.search(/^## /m);
-  return (next === -1 ? rest : rest.slice(0, next)).trim();
+  const lines = content.split("\n");
+
+  let start: number;
+  if (typeof heading === "string") {
+    start = findHeading(lines, heading);
+  } else {
+    const fenced = fencedLines(lines);
+    start = lines.findIndex((line, i) => !fenced[i] && heading.test(line));
+  }
+  if (start === -1) return "";
+
+  return lines.slice(start + 1, nextHeading(lines, start)).join("\n").trim();
 }
 
 /**
@@ -186,13 +265,15 @@ export interface Streak {
  * not a journaling day, which is why nothing here ever creates one.
  */
 export function computeStreak(dates: string[], today: string = todayKey()): Streak {
-  const sorted = [...new Set(dates)].sort();
-  const past = sorted.filter((d) => d <= today);
+  // Everything is computed over `past`. Using the unfiltered list for longest
+  // and total let a future-dated note inflate both — one written day reported
+  // "streak 1 · longest 4 · 5 total", which over-reports.
+  const past = [...new Set(dates)].sort().filter((d) => d <= today);
 
   let longest = 0;
   let run = 0;
   let previous: string | null = null;
-  for (const date of sorted) {
+  for (const date of past) {
     run = previous && daysBetween(previous, date) === 1 ? run + 1 : 1;
     if (run > longest) longest = run;
     previous = date;
@@ -214,7 +295,7 @@ export function computeStreak(dates: string[], today: string = todayKey()): Stre
     daysSinceLastEntry: lastEntry ? daysBetween(lastEntry, today) : null,
     current,
     longest,
-    total: sorted.length,
+    total: past.length,
   };
 }
 
@@ -284,19 +365,46 @@ export function appendToEntry(config: Config, dateKey: string, text: string): st
   return path;
 }
 
-/** Place text at the end of a section, leaving later sections untouched */
+/**
+ * Place text at the end of a section, leaving the heading and every later
+ * section untouched.
+ *
+ * The heading line is never rewritten and the body is never re-trimmed — what
+ * was already in the file comes back out byte for byte. Only the appended text
+ * is new.
+ */
 export function insertUnder(content: string, heading: string, text: string): string {
-  const start = content.indexOf(heading);
-  if (start === -1) return `${content.trimEnd()}\n\n${heading}\n\n${text}\n`;
+  const lines = content.split("\n");
+  const start = findHeading(lines, heading);
 
-  const after = start + heading.length;
-  const rest = content.slice(after);
-  const next = rest.search(/^## /m);
-  const body = (next === -1 ? rest : rest.slice(0, next)).trim();
-  const tail = next === -1 ? "" : rest.slice(next);
+  if (start === -1) {
+    return `${content.trimEnd()}\n\n${heading}\n\n${text}\n`;
+  }
 
-  const joined = body ? `${body}\n\n${text}` : text;
-  return `${content.slice(0, after)}\n\n${joined}\n\n${tail}`.trimEnd() + "\n";
+  const end = nextHeading(lines, start);
+  const body = lines.slice(start + 1, end);
+
+  // Trim only the blank padding around the section, never the writing itself.
+  let last = body.length;
+  while (last > 0 && body[last - 1]!.trim() === "") last--;
+  const hasWriting = body.slice(0, last).some((l) => l.trim() !== "");
+
+  const rebuilt = [
+    ...lines.slice(0, start + 1),
+    "",
+    ...(hasWriting ? [...trimLeadingBlank(body.slice(0, last)), ""] : []),
+    ...text.split("\n"),
+    "",
+    ...lines.slice(end),
+  ];
+
+  return rebuilt.join("\n").replace(/\n{3,}$/, "\n").trimEnd() + "\n";
+}
+
+function trimLeadingBlank(lines: string[]): string[] {
+  let first = 0;
+  while (first < lines.length && lines[first]!.trim() === "") first++;
+  return lines.slice(first);
 }
 
 export { todayKey, toDateKey, daysBetween };

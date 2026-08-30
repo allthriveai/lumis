@@ -80,3 +80,33 @@ describe("buildReceipt", () => {
     expect(buildReceipt({ streak, carried: [], targets: [] }).startsWith(RECEIPT_HEADING)).toBe(true);
   });
 });
+
+describe("the no-history guard reaches the rendered output", () => {
+  it("does not call a target behind when there is no journal behind the window", () => {
+    // cadenceStatus respects windowsOfHistory for consecutiveMisses; the render
+    // filter did not, so a brand-new vault reported every target as behind.
+    const fresh: Streak = { lastEntry: null, daysSinceLastEntry: null, current: 0, longest: 0, total: 0 };
+    const never = cadenceStatus(parseGoals(GOALS.replace(" `last:2026-08-01`", "")).targets[0]!, [], "2026-08-29");
+    expect(never.windowsOfHistory).toBe(0);
+
+    const out = buildReceipt({ streak: fresh, carried: [], targets: [never] });
+    expect(out).not.toContain("Behind this window");
+    expect(out).toContain("Nothing carried, nothing behind.");
+  });
+});
+
+describe("describeGap on a future date", () => {
+  it("does not report a mistyped future date as touched today", () => {
+    expect(describeGap(-124)).toBe("dated 124 days ahead");
+  });
+});
+
+describe("the ikigai-kan line states its sample size", () => {
+  it("says how many readings are behind the mean", () => {
+    const out = buildReceipt({
+      streak, carried: [], targets: [],
+      ikigaiKan: { recent: 4, previous: null, days: 14, readings: 1 },
+    });
+    expect(out).toContain("ikigai-kan 4.0 from 1 reading over 14 days");
+  });
+});

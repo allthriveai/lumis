@@ -136,14 +136,15 @@ interface Shape {
 function shapeOf(file: string): Shape {
   const name = basename(file, ".md");
   let raw: string;
-  let frontmatter: Record<string, unknown>;
-  let content: string;
   try {
     raw = readFileSync(file, "utf-8");
-    ({ frontmatter, content } = parseFrontmatter<Record<string, unknown>>(raw));
   } catch {
-    // Broken YAML is most likely in exactly the files this module targets —
-    // scraps typed on a phone. One of them must not take out the whole report.
+    return { isDaily: DATE_NAME.test(name), isMoment: false, date: null, empty: false, unreadable: true };
+  }
+  // parseFrontmatter absorbs malformed YAML and reports it rather than throwing,
+  // so the body is still usable and one bad scrap cannot take out the report.
+  const { frontmatter, content, unreadable } = parseFrontmatter<Record<string, unknown>>(raw);
+  if (unreadable) {
     return { isDaily: DATE_NAME.test(name), isMoment: false, date: null, empty: false, unreadable: true };
   }
   const tags = frontmatter["tags"];

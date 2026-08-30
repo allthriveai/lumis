@@ -83,11 +83,30 @@ export function parseGoals(markdown: string): Goals {
   let commented = false;
   let current: Target | null = null;
 
-  markdown.split("\n").forEach((raw, index) => {
-    if (raw.includes("<!--")) commented = true;
-    const wasCommented = commented;
-    if (raw.includes("-->")) commented = false;
-    if (wasCommented) return;
+  markdown.split("\n").forEach((original, index) => {
+    let raw = original;
+    // Strip an inline comment rather than discarding the line. Setting the flag
+    // for the whole line threw away the text BEFORE "<!--", so a target with a
+    // trailing note vanished from Goals.md with no diagnostic — unscored,
+    // unstamped, and absent from the receipt.
+    const startedCommented = commented;
+    let line = raw;
+    if (!commented) {
+      const open = line.indexOf("<!--");
+      if (open !== -1) {
+        const close = line.indexOf("-->", open);
+        line = close === -1 ? line.slice(0, open) : line.slice(0, open) + line.slice(close + 3);
+        commented = close === -1;
+      }
+    } else {
+      const close = line.indexOf("-->");
+      if (close === -1) return;
+      line = line.slice(close + 3);
+      commented = false;
+    }
+    if (startedCommented && line.trim() === "") return;
+    if (line.trim() === "") return;
+    raw = line;
 
     const h2 = raw.match(H2);
     if (h2) {

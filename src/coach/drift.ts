@@ -71,8 +71,14 @@ export function computeDrift(
     silentDays,
     longestSilence,
     missedTwice: statuses.filter((s) => s.consecutiveMisses >= MISS_TWICE),
+    // Same guard as the receipt: a window with no journal behind it is unknown,
+    // not behind.
     behind: statuses.filter(
-      (s) => s.consecutiveMisses < MISS_TWICE && s.required > 0 && s.touchesThisWindow < s.required,
+      (s) =>
+        s.windowsOfHistory > 0 &&
+        s.consecutiveMisses < MISS_TWICE &&
+        s.required > 0 &&
+        s.touchesThisWindow < s.required,
     ),
   };
 }

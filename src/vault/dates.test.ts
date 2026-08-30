@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseDateKey, toDateKey, shiftDateKey, daysBetween, formatDate, normalizeDateKey } from "./dates.js";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { parseDateKey, toDateKey, shiftDateKey, daysBetween, formatDate, normalizeDateKey, todayKey } from "./dates.js";
 
 describe("date keys are local calendar days", () => {
   it("parses a key to local midnight, not UTC midnight", () => {
@@ -56,5 +56,49 @@ describe("normalizeDateKey", () => {
     expect(normalizeDateKey("")).toBeNull();
     expect(normalizeDateKey("someday")).toBeNull();
     expect(normalizeDateKey(new Date("nope"))).toBeNull();
+  });
+});
+
+describe("todayKey", () => {
+  // The clock is pinned, not read. Comparing "now" against "now" only catches
+  // the UTC bug during the hours when the two days differ, so the test passed
+  // all morning and bit only after 5pm — the same time-dependent flakiness as
+  // an unpinned timezone.
+  afterEach(() => vi.useRealTimers());
+
+  it("is the LOCAL day, not the UTC day", () => {
+    // 21:30 in Los Angeles is already tomorrow in UTC. This is the exact trap
+    // the module docstring names: toISOString() rolls over mid-evening in the
+    // Americas and files the day's work under tomorrow.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-31T04:30:00Z"));
+    expect(new Date().toISOString().slice(0, 10)).toBe("2026-08-31");
+    expect(todayKey()).toBe("2026-08-30");
+  });
+
+  it("is the local day on the other side of midnight too", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-30T15:00:00Z"));   // 08:00 in Los Angeles
+    expect(todayKey()).toBe("2026-08-30");
+  });
+
+  it("round-trips through parseDateKey", () => {
+    expect(toDateKey(parseDateKey(todayKey()))).toBe(todayKey());
+  });
+});
+
+describe("impossible dates are rejected, not rolled over", () => {
+  it("refuses a day that does not exist in that month", () => {
+    // 2026-09-31 used to roll to October 1st and write the entry into an
+    // unrelated day's note.
+    expect(() => parseDateKey("2026-09-31")).toThrow(/No such date/);
+    expect(() => parseDateKey("2026-02-30")).toThrow(/No such date/);
+    expect(() => parseDateKey("2026-13-01")).toThrow(/No such date/);
+    expect(() => parseDateKey("2026-00-10")).toThrow(/No such date/);
+  });
+
+  it("still accepts real edge dates", () => {
+    expect(toDateKey(parseDateKey("2028-02-29"))).toBe("2028-02-29");   // leap year
+    expect(toDateKey(parseDateKey("2026-12-31"))).toBe("2026-12-31");
   });
 });

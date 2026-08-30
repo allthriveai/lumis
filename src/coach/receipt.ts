@@ -20,7 +20,10 @@ export const RECEIPT_HEADING = "## Where you are";
 /** "yesterday", "3 days ago" — plain, no softening */
 export function describeGap(days: number | null): string {
   if (days === null) return "never";
-  if (days <= 0) return "today";
+  // A future date is a typo, not "today". A mistyped last: year reported a
+  // target with no evidence behind it as touched today.
+  if (days < 0) return `dated ${-days} days ahead`;
+  if (days === 0) return "today";
   if (days === 1) return "yesterday";
   return `${days} days ago`;
 }
@@ -30,7 +33,7 @@ export interface ReceiptInput {
   carried: Task[];
   targets: CadenceStatus[];
   /** Mean ikigai-kan over the trailing window, and the window before it */
-  ikigaiKan?: { recent: number | null; previous: number | null; days: number };
+  ikigaiKan?: { recent: number | null; previous: number | null; days: number; readings?: number };
 }
 
 /**
@@ -54,10 +57,12 @@ export function buildReceipt({ streak, carried, targets, ikigaiKan }: ReceiptInp
   );
 
   if (ikigaiKan && ikigaiKan.recent !== null) {
-    const { recent, previous, days } = ikigaiKan;
-    const shift =
-      previous === null ? "" : ` · previous ${days} days ${previous.toFixed(1)}`;
-    lines.push(`ikigai-kan ${recent.toFixed(1)} over ${days} days${shift}`);
+    const { recent, previous, days, readings } = ikigaiKan;
+    const shift = previous === null ? "" : ` · previous ${days} days ${previous.toFixed(1)}`;
+    // Say how many readings are behind the mean. "3.4 over 14 days" read as a
+    // fortnight's data when it could be a single entry.
+    const n = readings === undefined ? "" : ` from ${readings} reading${readings === 1 ? "" : "s"}`;
+    lines.push(`ikigai-kan ${recent.toFixed(1)}${n} over ${days} days${shift}`);
   }
 
   lines.push("");
@@ -71,8 +76,14 @@ export function buildReceipt({ streak, carried, targets, ikigaiKan }: ReceiptInp
   // Loud and quiet are separated because never-miss-twice is the signal and one
   // miss is noise. Collapsing them would make both easy to ignore.
   const loud = targets.filter((t) => t.consecutiveMisses >= MISS_TWICE);
+  // windowsOfHistory > 0 is the same guard cadenceStatus applies to
+  // consecutiveMisses. Without it here, a brand-new vault reported every target
+  // as behind on day one — over-reporting, from a window with no journal
+  // behind it at all.
   const quiet = targets.filter(
-    (t) => t.consecutiveMisses === 1 || (t.required > 0 && t.touchesThisWindow < t.required),
+    (t) =>
+      t.windowsOfHistory > 0 &&
+      (t.consecutiveMisses === 1 || (t.required > 0 && t.touchesThisWindow < t.required)),
   );
 
   if (loud.length > 0) {

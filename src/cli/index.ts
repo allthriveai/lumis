@@ -15,7 +15,7 @@ import {
   readDay, readDays, readStreak, listDayKeys, unanalyzedDays,
   appendToEntry, carryForwardTasks, formatTask,
 } from "../vault/daily.js";
-import { todayKey, shiftDateKey, daysBetween } from "../vault/dates.js";
+import { todayKey, shiftDateKey, daysBetween, parseDateKey } from "../vault/dates.js";
 import { readGoals, cadenceStatus, stampFromDay, formatCadence } from "../coach/targets.js";
 import { buildReceipt, describeGap } from "../coach/receipt.js";
 import { computeDrift, DEFAULT_WINDOW_DAYS } from "../coach/drift.js";
@@ -55,16 +55,26 @@ function parseArgs(argv: string[]): Args {
     const i = argv.indexOf(`--${name}`);
     return i === -1 ? null : (argv[i + 1] ?? null);
   };
-  const days = flag("days");
-  const weeks = flag("weeks");
+  const positive = (name: string, fallback: number | null): number | null => {
+    const raw = flag(name);
+    if (raw === null) return fallback;
+    const n = Number(raw);
+    // NaN string-compares below every real date key, which silently produced an
+    // empty window and a header reading "NaN-NaN-NaN".
+    if (!Number.isInteger(n) || n < 1) {
+      throw new Error(`--${name} must be a whole number of 1 or more, got: ${raw}`);
+    }
+    return n;
+  };
+
   return {
     command: argv[0] ?? "help",
     json: argv.includes("--json"),
     date: flag("date") ?? todayKey(),
     append: flag("append"),
     appendStdin: argv.includes("--append-stdin"),
-    days: days ? Number(days) : null,
-    weeks: weeks ? Number(weeks) : 1,
+    days: positive("days", null),
+    weeks: positive("weeks", 1) ?? 1,
   };
 }
 
@@ -366,7 +376,15 @@ function tidy(config: Config, args: Args): number {
 }
 
 function main(): number {
-  const args = parseArgs(process.argv.slice(2));
+  let args: Args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+    // Validate --date here so a bad one is a message, not a stack trace.
+    parseDateKey(args.date);
+  } catch (err) {
+    process.stderr.write(`${(err as Error).message}\n`);
+    return 1;
+  }
 
   if (args.command === "help" || args.command === "--help" || args.command === "-h") {
     process.stdout.write(HELP);
@@ -393,4 +411,8 @@ function main(): number {
   }
 }
 
-process.exit(main());
+// NOT process.exit(): writes to a pipe are asynchronous, and exiting kills the
+// process before the buffer drains. The skills run `lumis <cmd> --json` through
+// a pipe, so a real-sized vault produced truncated, unparseable JSON — 589 KB
+// to a file came back as 67 KB through a pipe.
+process.exitCode = main();

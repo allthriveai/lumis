@@ -180,3 +180,62 @@ describe("free-hand capture must not alter what was written", () => {
     expect(out).toContain("the moment");
   });
 });
+
+describe("the writer's own headings are content, not structure", () => {
+  const note = "---\nd: 1\n---\n\n## Entry\n\nline one\n## a heading I typed myself\nsecond line\n\n## The five-second moment\n\nthe moment\n";
+
+  it("appends after the writer's heading, not before it", () => {
+    // Treating any "## " as a section boundary put a later capture ABOVE the
+    // earlier writing and silently reordered the day.
+    const out = insertUnder(note, ENTRY_HEADING, "Later that evening.");
+    expect(out.indexOf("a heading I typed")).toBeLessThan(out.indexOf("Later that evening"));
+    expect(out).toContain("## a heading I typed myself");
+    expect(sectionBody(out, ENTRY_HEADING)).toContain("second line");
+  });
+
+  it("leaves the moment section alone", () => {
+    expect(insertUnder(note, ENTRY_HEADING, "x")).toContain("## The five-second moment\n\nthe moment");
+  });
+
+  it("does not write inside a fenced code block", () => {
+    const fenced = "## Entry\n\nsnippet:\n\n```md\n## Not a heading\n```\n\ntrailing\n";
+    const out = insertUnder(fenced, ENTRY_HEADING, "APPENDED");
+    expect(out).toContain("```md\n## Not a heading\n```");
+    expect(out.indexOf("APPENDED")).toBeGreaterThan(out.indexOf("trailing"));
+  });
+
+  it("never rewrites the heading line it found", () => {
+    // "## Entry" matched as a substring rewrote "## Entry — morning" to
+    // "## Entry" and demoted "— morning" into the body.
+    const out = insertUnder("---\nd: 1\n---\n\n## Entry — morning\n\nfirst thing\n", ENTRY_HEADING, "NEW");
+    expect(out).toContain("## Entry — morning");
+    // The old code rewrote the heading to a bare "## Entry" and demoted the
+    // rest of it into the body, where it was indistinguishable from writing.
+    expect(out.split("\n").filter((l) => l.trimEnd() === "## Entry")).toEqual([]);
+    expect(out.trimEnd().endsWith("NEW")).toBe(true);
+  });
+
+  it("does not mistake a longer heading for the one it wants", () => {
+    const out = insertUnder("## Entrypoints\n\nabout entrypoints\n\n## Entry\n\nreal entry\n", ENTRY_HEADING, "NEW");
+    expect(out).toContain("## Entrypoints\n\nabout entrypoints");
+    expect(out.indexOf("NEW")).toBeGreaterThan(out.indexOf("real entry"));
+  });
+
+  it("preserves leading whitespace in the file", () => {
+    expect(insertUnder("## Entry\n", ENTRY_HEADING, "  indented\n\tand tabbed"))
+      .toContain("  indented\n\tand tabbed");
+  });
+});
+
+describe("computeStreak ignores the future", () => {
+  it("does not let a future-dated note inflate longest or total", () => {
+    // One written day in the past used to render "streak 1 · longest 4 · 5 total".
+    const s = computeStreak(
+      ["2026-08-30", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"],
+      "2026-08-30",
+    );
+    expect(s.current).toBe(1);
+    expect(s.longest).toBe(1);
+    expect(s.total).toBe(1);
+  });
+});

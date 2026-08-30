@@ -248,3 +248,24 @@ describe("stamp evidence and journal evidence together", () => {
     expect(cadenceStatus(stamped, days, "2026-08-29").touchesThisWindow).toBe(1);
   });
 });
+
+describe("inline comments do not delete targets", () => {
+  it("keeps a target that carries a trailing note", () => {
+    // Flagging the whole line as commented discarded the text BEFORE "<!--",
+    // so the target vanished from Goals.md with no diagnostic.
+    const { targets } = parseGoals(
+      "### x\n- [ ] Ride the bike `daily` #goal/move <!-- three times last week -->\n- [ ] Publish `weekly` #goal/write\n",
+    );
+    expect(targets.map((t) => t.text)).toEqual(["Ride the bike #goal/move", "Publish #goal/write"]);
+  });
+
+  it("still parks a target commented out in full", () => {
+    const { targets } = parseGoals("### x\n<!-- - [ ] Learn Japanese `weekly` #goal/learn -->\n- [ ] Ride `daily` #goal/move\n");
+    expect(targets.map((t) => t.text)).toEqual(["Ride #goal/move"]);
+  });
+
+  it("still parks a target inside a multi-line comment", () => {
+    const { targets } = parseGoals("### x\n<!--\n- [ ] Parked `daily` #goal/parked\n-->\n- [ ] Ride `daily` #goal/move\n");
+    expect(targets.map((t) => t.text)).toEqual(["Ride #goal/move"]);
+  });
+});

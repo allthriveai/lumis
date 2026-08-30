@@ -56,13 +56,15 @@ export function kanTrend(
   days: Day[],
   today: string = todayKey(),
   window = 14,
-): { recent: number | null; previous: number | null; days: number } {
+): { recent: number | null; previous: number | null; days: number; readings: number } {
   const scored = scoredDays(days);
   const age = (s: Scored) => daysBetween(s.dateKey, today);
+  const recentDays = scored.filter((s) => age(s) >= 0 && age(s) < window);
   return {
-    recent: mean(scored.filter((s) => age(s) < window).map((s) => s.value)),
+    recent: mean(recentDays.map((s) => s.value)),
     previous: mean(scored.filter((s) => age(s) >= window && age(s) < window * 2).map((s) => s.value)),
     days: window,
+    readings: recentDays.length,
   };
 }
 
