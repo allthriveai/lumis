@@ -3,6 +3,7 @@ import {
   parseTasks, formatTask, carryForwardTasks, parseDay, parseIkigaiKan,
   computeStreak, insertUnder, renderTemplate, sectionBody, ENTRY_HEADING,
 } from "./daily.js";
+import { isDateKey } from "./dates.js";
 
 const NOTE = `---
 date: 2026-08-29
@@ -237,5 +238,40 @@ describe("computeStreak ignores the future", () => {
     expect(s.current).toBe(1);
     expect(s.longest).toBe(1);
     expect(s.total).toBe(1);
+  });
+});
+
+describe("an unterminated fence must not swallow the rest of the note", () => {
+  const note = "---\nd: 1\n---\n\n## Entry\n\nMorning words.\n\n## The five-second moment\n\nThe gate latch stuck.\n";
+
+  it("keeps the moment heading visible after an unclosed code fence", () => {
+    // Letting an open fence run to EOF hid the moment heading: later captures
+    // landed below it and the day was reported as never read.
+    const withFence = insertUnder(note, ENTRY_HEADING, "The error:\n\n```js\nTypeError: x is not a function");
+    const after = insertUnder(withFence, ENTRY_HEADING, "Evening: figured it out.");
+
+    expect(sectionBody(after, /^##\s+The five-second moment\s*$/m)).toBe("The gate latch stuck.");
+    expect(after.indexOf("Evening: figured it out.")).toBeLessThan(after.indexOf("## The five-second moment"));
+  });
+
+  it("still treats a properly closed fence as code", () => {
+    const fenced = "## Entry\n\n```md\n## The five-second moment\n```\n\n## The five-second moment\n\nreal\n";
+    const out = insertUnder(fenced, ENTRY_HEADING, "appended");
+    expect(sectionBody(out, /^##\s+The five-second moment\s*$/m)).toBe("real");
+    expect(out.indexOf("appended")).toBeLessThan(out.lastIndexOf("## The five-second moment"));
+  });
+
+  it("does not alter trailing spaces on the last line", () => {
+    // Two trailing spaces is a markdown line break.
+    expect(insertUnder("## Entry\n", ENTRY_HEADING, "a line  ")).toBe("## Entry\n\na line  \n");
+  });
+});
+
+describe("a vault file with an impossible date is skipped, not fatal", () => {
+  it("rejects a date-shaped key that is not a real date", () => {
+    expect(isDateKey("2026-08-30")).toBe(true);
+    expect(isDateKey("2025-02-29")).toBe(false);   // not a leap year
+    expect(isDateKey("2026-09-31")).toBe(false);
+    expect(isDateKey("nonsense")).toBe(false);
   });
 });

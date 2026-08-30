@@ -6,7 +6,7 @@ import { join, dirname } from "node:path";
 import type { Config, Day, Task } from "../types.js";
 import { vaultPath } from "../config.js";
 import { parseFrontmatter } from "./frontmatter.js";
-import { parseDateKey, toDateKey, formatDate, daysBetween, todayKey } from "./dates.js";
+import { parseDateKey, toDateKey, formatDate, daysBetween, todayKey, isDateKey } from "./dates.js";
 
 const TASK_LINE = /^(\s*)[-*] \[([ xX])\]\s+(.*)$/;
 // Unanchored on purpose: formatTask writes the marker last, but a hand-written
@@ -92,23 +92,32 @@ export function carryForwardTasks(tasks: Task[], gapDays: number): Task[] {
 // capture landed above the first and silently reordered the journal.
 // ---------------------------------------------------------------------------
 
-/** Which lines sit inside a fenced code block, where "## " is not a heading */
+/**
+ * Which lines sit inside a fenced code block, where "## " is not a heading.
+ *
+ * An UNTERMINATED fence is not treated as a fence. Letting one run to end of
+ * file hid the "## The five-second moment" heading from everything downstream:
+ * later captures landed below the moment instead of above it, and the day was
+ * reported as never read. Pasting a snippet without its closing fence is an
+ * ordinary thing to do, so the open case has to degrade to plain text.
+ */
 function fencedLines(lines: string[]): boolean[] {
-  const inFence: boolean[] = [];
-  let fence: string | null = null;
-  for (const line of lines) {
-    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
-    if (fence === null && marker) {
-      fence = marker[0]!;
-      inFence.push(true);
+  const inFence = new Array<boolean>(lines.length).fill(false);
+  let open: { at: number; marker: string } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const marker = lines[i]!.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
+    if (!marker) continue;
+
+    if (open === null) {
+      open = { at: i, marker: marker[0]! };
       continue;
     }
-    if (fence !== null && marker && marker[0] === fence) {
-      fence = null;
-      inFence.push(true);
-      continue;
+    if (marker[0] === open.marker) {
+      // Only a closed pair marks anything as fenced.
+      for (let j = open.at; j <= i; j++) inFence[j] = true;
+      open = null;
     }
-    inFence.push(fence !== null);
   }
   return inFence;
 }
@@ -214,7 +223,9 @@ export function listDayKeys(config: Config): string[] {
   return readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
     .map((f) => f.slice(0, -3))
-    .filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k))
+    // Shape alone is not enough: a hand-typed 2025-02-29.md passes the regex
+    // and then throws out of parseDateKey, taking down every command.
+    .filter((k) => isDateKey(k))
     .sort();
 }
 
@@ -398,7 +409,11 @@ export function insertUnder(content: string, heading: string, text: string): str
     ...lines.slice(end),
   ];
 
-  return rebuilt.join("\n").replace(/\n{3,}$/, "\n").trimEnd() + "\n";
+  // Drop trailing blank LINES without touching the last content line: two
+  // trailing spaces is a markdown line break, so trimEnd() there alters meaning.
+  let stop = rebuilt.length;
+  while (stop > 0 && rebuilt[stop - 1]!.trim() === "") stop--;
+  return rebuilt.slice(0, stop).join("\n") + "\n";
 }
 
 function trimLeadingBlank(lines: string[]): string[] {

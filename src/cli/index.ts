@@ -118,7 +118,9 @@ function readStdin(): string {
   // Passing that through a shell argument mangles it or breaks the call, and
   // the one thing capture must never do is alter what was written.
   try {
-    return readFileSync(0, "utf-8").trim();
+    // Strip only the trailing newline the shell adds. A .trim() here removed
+    // the writer's own leading indentation, which capture must not do.
+    return readFileSync(0, "utf-8").replace(/\r?\n$/, "");
   } catch {
     return "";
   }

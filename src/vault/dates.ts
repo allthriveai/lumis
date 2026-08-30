@@ -11,6 +11,22 @@
 // ---------------------------------------------------------------------------
 
 /**
+ * True when a string is a real calendar date in YYYY-MM-DD form.
+ *
+ * The non-throwing companion to parseDateKey, for the places a key arrives from
+ * the vault rather than from an argument: a hand-typed filename, a hand-edited
+ * `last:` stamp. Those must be skipped, not crash the command.
+ */
+export function isDateKey(key: string): boolean {
+  try {
+    parseDateKey(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Parse a YYYY-MM-DD key into a Date at local midnight.
  *
  * Throws on a malformed key AND on an impossible one. Shape-checking alone let

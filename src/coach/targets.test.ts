@@ -269,3 +269,13 @@ describe("inline comments do not delete targets", () => {
     expect(targets.map((t) => t.text)).toEqual(["Ride #goal/move"]);
   });
 });
+
+describe("an impossible last: stamp is treated as absent", () => {
+  it("does not throw on a hand-typed date that does not exist", () => {
+    // Goals.md is hand-maintained; Feb 29 in a non-leap year is a natural typo,
+    // and it used to crash every command out of daysBetween.
+    const { targets } = parseGoals("### x\n- [ ] Ride `daily` `last:2025-02-29` #goal/move\n");
+    expect(targets[0]!.last).toBeNull();
+    expect(() => cadenceStatus(targets[0]!, [], "2026-08-30")).not.toThrow();
+  });
+});

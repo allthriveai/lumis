@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { Cadence, Config, Day, Goals, Milestone, Target } from "../types.js";
 import { vaultPath } from "../config.js";
-import { daysBetween, todayKey } from "../vault/dates.js";
+import { daysBetween, todayKey, isDateKey } from "../vault/dates.js";
 import { goalTags } from "../vault/daily.js";
 
 const CHECKBOX = /^\s*[-*] \[([ xX])\]\s+(.*)$/;
@@ -63,6 +63,10 @@ export function formatCadence(cadence: Cadence): string {
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
+
+function validDate(key: string | undefined): string | null {
+  return key && isDateKey(key) ? key : null;
+}
 
 function firstGoal(text: string): string | null {
   return goalTags(text)[0] ?? null;
@@ -159,7 +163,10 @@ export function parseGoals(markdown: string): Goals {
       when: null,
       floor: null,
       goal: firstGoal(body),
-      last: body.match(LAST)?.[1] ?? null,
+      // Goals.md is hand-maintained, so a stamp like `last:2025-02-29` is a
+      // natural typo. Treat an impossible date as no stamp rather than throwing
+      // out of daysBetween and killing the whole command.
+      last: validDate(body.match(LAST)?.[1]),
       line: index,
     };
     targets.push(current);
