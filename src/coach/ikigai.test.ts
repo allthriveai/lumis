@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   partitionByKan, scoredDays, kanTrend, parseSources, checkSources,
-  starvedNeeds, needCoverage, MIN_SCORED_DAYS,
+  starvedNeeds, needCoverage, parseRubric, MIN_SCORED_DAYS,
 } from "./ikigai.js";
 import { parseDay } from "../vault/daily.js";
 import { shiftDateKey } from "../vault/dates.js";
@@ -177,5 +177,46 @@ describe("the seven needs", () => {
     expect(unservedTargets).toEqual(["Answer email"]);
     expect(unservedNeeds).toContain("resonance");
     expect(unservedNeeds).not.toContain("life-satisfaction");
+  });
+});
+
+describe("intake readiness", () => {
+  const RUBRIC = `# Ikigai
+
+## How I score ikigai-kan
+
+- 1 — the Tuesday I could not get out of the chair
+- 2 — heads down, nothing landed
+- 3 — an ordinary working day
+- 4 — the morning ride before the launch
+- 5 — the day on the boat for mum's birthday
+
+## Sources
+
+- Building tools people use #goal/build
+- Being a good friend
+`;
+
+  it("reads anchors written against numbers", () => {
+    const anchors = parseRubric(RUBRIC);
+    expect(anchors.size).toBe(5);
+    expect(anchors.get(5)).toBe("the day on the boat for mum's birthday");
+    expect(anchors.get(1)).toBe("the Tuesday I could not get out of the chair");
+  });
+
+  it("reports a partly filled scale as unusable rather than usable", () => {
+    // A half-anchored scale is not comparable across months, which is the one
+    // thing the evidence pass depends on.
+    const partial = RUBRIC.replace("- 3 — an ordinary working day\n", "").replace("- 4 — the morning ride before the launch\n", "");
+    expect(parseRubric(partial).size).toBe(3);
+  });
+
+  it("finds no anchors when the section is absent", () => {
+    expect(parseRubric("# Ikigai\n\n## Sources\n\n- a thing #goal/x\n").size).toBe(0);
+  });
+
+  it("stops at the next heading", () => {
+    expect(parseRubric(RUBRIC).size).toBe(5);
+    expect([...parseRubric(RUBRIC).values()].some((v) => v.includes("goal/build"))).toBe(false);
   });
 });

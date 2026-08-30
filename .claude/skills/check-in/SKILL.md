@@ -73,7 +73,26 @@ If it is clearly bigger than a line — a real scene, a change they are still
 turning over — offer once to promote it into `Life/Moments/` as its own note.
 Once. If they say no, drop it.
 
-## 4. Reflection
+## 4. The number
+
+If `todayIkigaiKan` is null, ask for it — once, at the end, in one line:
+
+> Today's ikigai-kan, 1 to 5?
+
+Write it into the day's frontmatter. Take the number and move on: no follow-up,
+no asking them to justify it, no commentary on whether it seems right. It is a
+reading, not a claim to be examined.
+
+This is the only place the number is ever collected, and a blank one means the
+day contributes nothing to the ikigai evidence — so ask every day, and accept
+a refusal without pushing.
+
+If `ikigaiIntake.ready` is false, the scale has not been anchored yet. Say so
+once, briefly, and point at `/ikigai` — an unanchored number is not comparable to
+next month's, so it is worth ten minutes before hundreds of days accumulate
+against a scale that means nothing. Then drop it; do not raise it again.
+
+## 5. Reflection
 
 Only now. Last, so it cannot shape what they wrote.
 

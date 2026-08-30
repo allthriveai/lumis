@@ -17,6 +17,23 @@ Japanese. Two distinctions carry the whole file:
 One paragraph, in your words: what it is actually like on a day when life feels
 worth living. Not what you want it to be like. Rewrite it quarterly.
 
+## How I score ikigai-kan
+
+The 1-5 you write in each daily note. Anchor each number to a **remembered day**,
+not an adjective — "good" and "fine" drift, a specific Tuesday does not. Written
+once, re-read whenever the number is hard to pick.
+
+Everything the ikigai evidence pass does is compare these numbers to each other,
+so a 3 in August has to mean what a 3 in November means. Until all five are
+filled in, the daily readings are not comparable and the count toward the
+sixty-day threshold is measuring nothing.
+
+- 1 — 
+- 2 — 
+- 3 — 
+- 4 — 
+- 5 — 
+
 ## Sources
 
 Things that are a source of ikigai right now. Concrete, present tense, not

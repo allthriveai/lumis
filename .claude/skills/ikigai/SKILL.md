@@ -40,6 +40,52 @@ Two distinctions from the actual source, and both matter:
 Most purpose frameworks collapse these, which is why their answers feel
 unstable. Keep them apart.
 
+## Intake, if it has not happened
+
+When `intake.ready` is false, **do intake first and do not start anywhere else.**
+It is a prerequisite, not a formality: everything the evidence pass does is
+compare daily numbers to each other, so until the scale is anchored the sixty-day
+counter is measuring nothing. Every day journaled before intake is a data point
+that cannot be used.
+
+Say that plainly, then work through the four steps in order. The order matters —
+evidence before introspection. Asked cold, "what is your ikigai" returns an
+aspiration; asked after reading four years of their own writing, it returns
+something true.
+
+**1. Read backward first.** The retrospective pass below. Do it before asking a
+single question, and bring what you found into every step after.
+
+**2. Anchor the scale.** Five numbers, each tied to a **remembered day** rather
+than an adjective. "Good" and "fine" drift; a specific Tuesday does not.
+
+Ask for the ends first, because they are the easiest to remember and they fix
+the middle:
+
+> Think of a day in the last year when it felt most worth being alive. Not the
+> happiest — the one where being you felt like the right thing to be. What
+> happened that day?
+
+Then the same for a 1. Then 3 as the ordinary day, and 2 and 4 relative to those.
+Use `Life/Moments/` to jog it — they have already written many of these down.
+
+Write all five into `## How I score ikigai-kan` in their words, not yours. If
+they cannot fill one, leave it blank and say the scale is not usable yet rather
+than inventing an anchor.
+
+**3. Draft the sources.** From the retrospective evidence, not from imagination:
+what has actually recurred across years of their writing? Propose what you saw,
+with citations, and let them accept, reject or rename each one. Every source
+needs a `#goal` tag, or the evidence check has nothing to count and Lumis will
+report it as uncheckable.
+
+**4. Baseline the seven needs.** Score all seven now, one at a time, in their own
+words for what each means. This is the first point in seven time series and its
+value is mostly that later quarters have something to move against.
+
+Then stop. Tell them the date the evidence pass unlocks, and that the daily
+number is now the only thing standing between here and there.
+
 ## If the window is thin
 
 When `partition.insufficient` is true, **say so plainly and do not run the

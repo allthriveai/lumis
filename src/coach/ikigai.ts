@@ -134,6 +134,65 @@ export function parseSources(markdown: string): Source[] {
     .map((text) => ({ text, goal: goalTags(text)[0] ?? null }));
 }
 
+const RUBRIC_HEADING = /^##\s+How I score ikigai-kan\s*$/im;
+
+/**
+ * The 1-5 anchors, read out of Ikigai.md.
+ *
+ * Without these the daily number is uncalibrated: a 3 in August and a 3 in
+ * November mean whatever the writer felt like that morning, and the evidence
+ * pass is built entirely on comparing those numbers to each other. A scale
+ * anchored to remembered days is reproducible; one anchored to adjectives
+ * ("good", "fine") is not.
+ */
+export function parseRubric(markdown: string): Map<number, string> {
+  const anchors = new Map<number, string>();
+  const start = markdown.search(RUBRIC_HEADING);
+  if (start === -1) return anchors;
+
+  const body = markdown.slice(start).split("\n").slice(1).join("\n").split(/^## /m)[0] ?? "";
+  for (const line of body.split("\n")) {
+    const match = line.match(/^\s*[-*]?\s*\**([1-5])\**\s*[—–:-]\s*(.*\S)\s*$/);
+    if (match) anchors.set(Number(match[1]), match[2]!);
+  }
+  return anchors;
+}
+
+export interface IntakeStatus {
+  /** All five anchors written down, so the daily number means something */
+  hasRubric: boolean;
+  anchorsWritten: number;
+  sourcesTotal: number;
+  /** Sources carrying a #goal tag, so the evidence check can count them */
+  sourcesCheckable: number;
+  quartersScored: number;
+  scoredDays: number;
+  /** Days still needed before the evidence pass can run */
+  daysUntilEvidence: number;
+  /** False means intake has not happened and the daily readings are ungrounded */
+  ready: boolean;
+}
+
+export function intakeStatus(config: Config, days: Day[]): IntakeStatus {
+  const path = vaultPath(config, "ikigai");
+  const markdown = existsSync(path) ? readFileSync(path, "utf-8") : "";
+  const rubric = parseRubric(markdown);
+  const sources = parseSources(markdown);
+  const quarters = readNeedHistory(config).filter((q) => Object.keys(q.scores).length > 0);
+  const scored = scoredDays(days).length;
+
+  return {
+    hasRubric: rubric.size === 5,
+    anchorsWritten: rubric.size,
+    sourcesTotal: sources.length,
+    sourcesCheckable: sources.filter((s) => s.goal).length,
+    quartersScored: quarters.length,
+    scoredDays: scored,
+    daysUntilEvidence: Math.max(0, MIN_SCORED_DAYS - scored),
+    ready: rubric.size === 5 && sources.filter((s) => s.goal).length > 0,
+  };
+}
+
 export function readSources(config: Config): Source[] {
   const path = vaultPath(config, "ikigai");
   return existsSync(path) ? parseSources(readFileSync(path, "utf-8")) : [];

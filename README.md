@@ -61,7 +61,7 @@ for s in journal check-in review ikigai; do ln -s "$PWD/.claude/skills/$s" ~/.cl
 | `/journal` | any time | free-hand writing, captured verbatim. Says nothing back |
 | `/check-in` | daily | receipt, entry, five-second moment, reflection — in that order |
 | `/review` | weekly | reads notes you wrote alone, what slipped, filing, next week's WOOP |
-| `/ikigai` | quarterly | the seven needs, and what your high days have in common |
+| `/ikigai` | first run, then quarterly | intake, the seven needs, and what your high days have in common |
 
 `/journal` and `/check-in` are deliberately separate. Capture and coaching are
 different activities, and doing them at once ruins the first: morning pages work
@@ -100,6 +100,11 @@ stamps neither. A cadence window with no journal behind it is unknown, not
 missed. A source touched twice in ninety days is insufficient data, not a
 disproved claim. A coach that overstates gets ignored, and then it is worth
 nothing at all.
+
+**Intake before data.** The daily `ikigai-kan` number is only meaningful against
+an anchored scale, so `/ikigai` runs intake first and says plainly that until
+five anchors exist, the sixty-day counter is measuring nothing. Anchors are
+remembered days, not adjectives — "good" drifts, a specific Tuesday does not.
 
 **Say nothing on thin data.** `/ikigai` refuses to read your high and low days
 until 60 of them carry a score, and says how many more are needed. A confident

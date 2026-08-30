@@ -22,7 +22,7 @@ import { computeDrift, DEFAULT_WINDOW_DAYS } from "../coach/drift.js";
 import { findMisfiled } from "../coach/filing.js";
 import {
   partitionByKan, kanTrend, readSources, checkSources, readNeedHistory, starvedNeeds,
-  MIN_SCORED_DAYS,
+  intakeStatus, MIN_SCORED_DAYS,
 } from "../coach/ikigai.js";
 
 const HELP = `lumis — an AI life coach that lives in your Obsidian vault
@@ -180,6 +180,10 @@ function today(config: Config, args: Args): number {
     // Typed on the phone, not yet talked through at the desk.
     unanalyzed: pending.map((d) => ({ date: d.dateKey, path: d.path })),
     todayHasNote: readDay(config, date) !== null,
+    // check-in asks for this when it is missing; nothing else ever will, and a
+    // blank field means the day contributes nothing to the ikigai evidence.
+    todayIkigaiKan: readDay(config, date)?.ikigaiKan ?? null,
+    ikigaiIntake: intakeStatus(config, window),
   }, args.json);
 
   return 0;
@@ -283,7 +287,24 @@ function ikigai(config: Config, args: Args): number {
   const needs = readNeedHistory(config);
   const starved = starvedNeeds(needs);
 
+  const intake = intakeStatus(config, days);
   const lines = [`## Ikigai — ${span} days to ${date}`, ""];
+
+  if (!intake.ready) {
+    // Intake is a prerequisite, not a formality. Until the scale is anchored
+    // the daily readings are not comparable to each other, so the sixty-day
+    // counter is measuring nothing.
+    lines.push(
+      "Intake has not been done.",
+      `  scale anchored:      ${intake.anchorsWritten}/5 written`,
+      `  sources listed:      ${intake.sourcesTotal} (${intake.sourcesCheckable} with a #goal tag)`,
+      `  quarters scored:     ${intake.quartersScored}`,
+      "",
+      "Until the 1-5 scale is written down, the daily readings are not",
+      "comparable to each other and the evidence pass has nothing to work with.",
+      "",
+    );
+  }
 
   if (partition.insufficient) {
     // Saying this plainly is the whole safety property. A confident reading off
@@ -338,7 +359,7 @@ function ikigai(config: Config, args: Args): number {
 
   const display = lines.join("\n").trimEnd() + "\n";
   emit(display, {
-    date, window: span, display, partition, evidence, needs, starved,
+    date, window: span, display, intake, partition, evidence, needs, starved,
     minScoredDays: MIN_SCORED_DAYS,
   }, args.json);
   return 0;
