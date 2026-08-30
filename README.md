@@ -30,6 +30,7 @@ ages, cadence windows, the ikigai partition. Everything else is prompt.
 
 ```sh
 npm install && npm run build
+npm link                         # puts `lumis` on your PATH
 cp .lumisrc.example .lumisrc     # set vaultPath
 npm run check:vault              # every configured path must exist
 ```
@@ -42,6 +43,10 @@ Copy the templates into your vault and edit them:
 cp "templates/vault/Daily Note.md" "$VAULT/Templates/"
 cp templates/vault/Goals.md templates/vault/Ikigai.md "$VAULT/Lumis/"
 ```
+
+`npm link` matters: the skills shell out to `lumis`, so it has to be on your
+PATH. Run the skills from inside your vault, where `.lumisrc` is picked up from
+the working directory.
 
 Then make the skills available from inside your vault:
 
