@@ -16,7 +16,6 @@ export const DEFAULT_PATHS: VaultPaths = {
   templates: "Templates",
   goals: "Lumis/Goals.md",
   ikigai: "Lumis/Ikigai.md",
-  voice: "Lumis/Voice.md",
 };
 
 /**
