@@ -57,3 +57,7 @@ resolves it from the cwd, then `~`, then `LUMIS_VAULT`. Path defaults live in
 `DEFAULT_PATHS` and are always vault-relative. `lumis check-vault` asserts every
 configured path exists — a renamed folder otherwise makes a skill create an
 empty directory and write the day's entry somewhere nobody looks again.
+
+`lumis setup` is the one command allowed to create things: folders, templates,
+the vault-root `.lumisrc`, and the skill symlinks. It lives in `src/cli/` with
+the other commands. It must stay idempotent and must never overwrite.

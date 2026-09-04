@@ -4,10 +4,18 @@
 //
 // Every command prints a `display` block and, with --json, the numbers behind
 // it. The skills print the display verbatim and interpret the numbers. Nothing
-// here writes to the vault except `today --append`, and nothing here ever
-// creates an empty note: looking at where you are must not change where you are.
+// here writes to the vault except `today --append` and `setup`, and nothing
+// here ever creates an empty note: looking at where you are must not change
+// where you are. Setup only ever creates what is absent.
 // ---------------------------------------------------------------------------
-import { existsSync, statSync, readFileSync } from "node:fs";
+import {
+  existsSync, statSync, lstatSync, readFileSync, readlinkSync,
+  mkdirSync, copyFileSync, writeFileSync, symlinkSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline/promises";
 import { loadConfig, vaultPath, DEFAULT_PATHS } from "../config.js";
 import type { Config, VaultPaths } from "../types.js";
 import { SEVEN_NEEDS } from "../types.js";
@@ -27,6 +35,8 @@ import {
 
 const HELP = `lumis — an AI life coach that lives in your Obsidian vault
 
+  lumis setup [--vault <path>]    create the vault layout, templates, .lumisrc and skill links
+                                  asks for the path if not given; Enter accepts ~/lumis-vault
   lumis today [--append <text>]   where you are, and the day's carried tasks
   lumis today --append-stdin      append free-hand writing read from stdin
   lumis week [--weeks N]          the week's numbers, drift, and targets
@@ -37,7 +47,8 @@ const HELP = `lumis — an AI life coach that lives in your Obsidian vault
   --json    print the numbers as JSON as well as the display block
   --date    override today, as YYYY-MM-DD (for testing)
 
-Configuration lives in .lumisrc. See .lumisrc.example.
+Configuration lives in .lumisrc, written by setup into the vault root. Run
+lumis from inside the vault, or set LUMIS_VAULT.
 `;
 
 interface Args {
@@ -48,6 +59,7 @@ interface Args {
   appendStdin: boolean;
   days: number | null;
   weeks: number;
+  vault: string | null;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -75,6 +87,7 @@ function parseArgs(argv: string[]): Args {
     appendStdin: argv.includes("--append-stdin"),
     days: positive("days", null),
     weeks: positive("weeks", 1) ?? 1,
+    vault: flag("vault"),
   };
 }
 
@@ -109,6 +122,222 @@ function checkVault(config: Config): number {
 
   emit(lines.join("\n"), { vaultOk, paths: rows }, true);
   return vaultOk && missing.length === 0 ? 0 : 1;
+}
+
+// ---------------------------------------------------------------------------
+// `lumis setup`: the one command that is allowed to create things.
+//
+// It is idempotent: every step creates only what is absent and reports what it
+// found. Run it twice and the second run changes nothing. It never overwrites a
+// note, a config, or a skill folder that already exists — a Goals.md with a
+// year of targets in it is not something a setup command gets to reset.
+// ---------------------------------------------------------------------------
+
+interface SetupStep {
+  kind: "vault" | "dir" | "file" | "rc" | "skill";
+  target: string;
+  status: "created" | "exists" | "skipped";
+  note?: string;
+}
+
+/** The skills shipped with Lumis. The folder names are the slash commands. */
+const SKILLS = ["journal", "check-in", "review", "ikigai"] as const;
+
+/**
+ * One step. `blocked` is asked why the target cannot be made, given whether
+ * something is already there; null means go ahead. Whatever exists is left
+ * exactly as it was.
+ */
+function ensure(
+  steps: SetupStep[],
+  kind: SetupStep["kind"],
+  target: string,
+  blocked: (present: boolean) => string | null,
+  make: () => void,
+): void {
+  let present = true;
+  try {
+    lstatSync(target);
+  } catch {
+    present = false;
+  }
+  const note = blocked(present);
+  if (note) {
+    steps.push({ kind, target, status: "skipped", note });
+  } else if (present) {
+    steps.push({ kind, target, status: "exists" });
+  } else {
+    mkdirSync(dirname(target), { recursive: true });
+    make();
+    steps.push({ kind, target, status: "created" });
+  }
+}
+
+/**
+ * Walk up from this file until a package.json appears. It sits at
+ * src/cli/index.ts in development and dist/cli/index.js when built, so a fixed
+ * number of `..` would be right in one place and wrong in the other.
+ */
+function findPackageRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (;;) {
+    if (existsSync(join(dir, "package.json"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error("Could not find the lumis package root");
+    dir = parent;
+  }
+}
+
+/**
+ * The rc is written into the vault root, because that is the working directory
+ * the skills run from and the first place config resolution looks. A path
+ * under the home directory is written with `~` so it reads the same on any
+ * machine the vault is copied to.
+ */
+function renderRc(config: Config): string {
+  const home = homedir();
+  const portable = config.vaultPath === home || config.vaultPath.startsWith(home + "/")
+    ? "~" + config.vaultPath.slice(home.length)
+    : config.vaultPath;
+  return JSON.stringify({ vaultPath: portable, paths: config.paths }, null, 2) + "\n";
+}
+
+function runSetup(config: Config, packageRoot: string, skillsDir: string): SetupStep[] {
+  const steps: SetupStep[] = [];
+  const notDir = (target: string) => (present: boolean) =>
+    present && !statSync(target).isDirectory() ? "exists but is not a directory" : null;
+  const dir = (kind: "vault" | "dir", target: string) =>
+    ensure(steps, kind, target, notDir(target), () => mkdirSync(target, { recursive: true }));
+
+  dir("vault", config.vaultPath);
+  // A file where the vault should be cannot hold anything. Stop here rather
+  // than let every mkdir below throw ENOTDIR through a stack trace.
+  if (steps[0]?.status === "skipped") return steps;
+
+  // Folders first. Parent folders of the single files come along so a path
+  // like Lumis/Goals.md has somewhere to go.
+  const folders = new Set<string>([
+    vaultPath(config, "dailyNotes"),
+    vaultPath(config, "moments"),
+    vaultPath(config, "reviews"),
+    vaultPath(config, "templates"),
+    dirname(vaultPath(config, "goals")),
+    dirname(vaultPath(config, "ikigai")),
+  ]);
+  for (const folder of folders) dir("dir", folder);
+
+  // Where each shipped template lands. The configured path is used so a
+  // renamed folder in .lumisrc is respected rather than recreated at the default.
+  const templateDir = join(packageRoot, "templates", "vault");
+  const files: Array<[string, string]> = [
+    ["Daily Note.md", join(vaultPath(config, "templates"), "Daily Note.md")],
+    ["Ikigai Review.md", join(vaultPath(config, "templates"), "Ikigai Review.md")],
+    ["Goals.md", vaultPath(config, "goals")],
+    ["Ikigai.md", vaultPath(config, "ikigai")],
+  ];
+  for (const [name, target] of files) {
+    const source = join(templateDir, name);
+    ensure(steps, "file", target,
+      (present) => !present && !existsSync(source) ? `template missing: ${source}` : null,
+      () => copyFileSync(source, target));
+  }
+
+  const rc = join(config.vaultPath, ".lumisrc");
+  ensure(steps, "rc", rc, () => null, () => writeFileSync(rc, renderRc(config), "utf-8"));
+
+  // A real folder or a link elsewhere is someone's own skill. Replacing it
+  // would silently swap what /check-in means for them.
+  for (const name of SKILLS) {
+    const source = join(packageRoot, ".claude", "skills", name);
+    const target = join(skillsDir, name);
+    const ours = () => lstatSync(target).isSymbolicLink() && resolve(dirname(target), readlinkSync(target)) === source;
+    ensure(steps, "skill", target,
+      (present) => present
+        ? (ours() ? null : "exists and is not a link to this package; left alone")
+        : (existsSync(source) ? null : `skill missing: ${source}`),
+      () => symlinkSync(source, target, "dir"));
+  }
+
+  return steps;
+}
+
+type VaultAnswer = { kind: "path"; path: string } | { kind: "no-tty" } | { kind: "cancelled" };
+
+/**
+ * Ask for the vault path, offering `fallback` so Enter accepts it. The path is
+ * shown expanded — the real home directory, not `~` — because the point of the
+ * prompt is to let the user see exactly where files are about to be created.
+ */
+async function askVaultPath(fallback: string): Promise<VaultAnswer> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return { kind: "no-tty" };
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await rl.question(`Vault path [${fallback}]: `)).trim();
+    return { kind: "path", path: answer === "" ? fallback : answer };
+  } catch {
+    // Ctrl+D or Ctrl+C at the prompt rejects the question. That is a cancel,
+    // not a crash, and must not create anything.
+    return { kind: "cancelled" };
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * The only command that runs without a config, because on a fresh machine
+ * there is none yet. --vault wins. Otherwise the user is asked, with the
+ * default being whatever config resolution already finds (LUMIS_VAULT or an
+ * existing .lumisrc) and, failing that, ~/lumis-vault.
+ */
+async function setup(args: Args): Promise<number> {
+  let vault = args.vault;
+  if (vault === null) {
+    let fallback = join(homedir(), "lumis-vault");
+    try {
+      fallback = loadConfig().vaultPath;
+    } catch {
+      // No config anywhere yet: the plain default stands.
+    }
+    const answer = await askVaultPath(fallback);
+    if (answer.kind === "no-tty") {
+      process.stderr.write(`No terminal to ask on. Run: lumis setup --vault ${fallback}\n`);
+      return 1;
+    }
+    if (answer.kind === "cancelled") {
+      process.stderr.write("\nCancelled. Nothing was created.\n");
+      return 1;
+    }
+    vault = answer.path;
+  }
+
+  let config: Config;
+  try {
+    config = loadConfig({ vaultPath: vault });
+  } catch (err) {
+    process.stderr.write(`${(err as Error).message}\n`);
+    return 1;
+  }
+
+  const steps = runSetup(config, findPackageRoot(), join(homedir(), ".claude", "skills"));
+
+  const counts = { created: 0, exists: 0, skipped: 0 };
+  const lines = [`Setting up ${config.vaultPath}`, ""];
+  for (const s of steps) {
+    counts[s.status] += 1;
+    lines.push(`  ${s.status.padEnd(7)}  ${s.kind.padEnd(5)}  ${s.target}${s.note ? ` — ${s.note}` : ""}`);
+  }
+  lines.push(
+    "",
+    `${counts.created} created, ${counts.exists} already there, ${counts.skipped} skipped.`,
+    "",
+    "Restart Claude Code so it picks up the skills, then run it from inside the vault.",
+    "",
+  );
+  emit(lines.join("\n"), { vaultPath: config.vaultPath, steps }, args.json);
+
+  // Setup is finished when check-vault is green against the config it just
+  // wrote, so the two are run together rather than trusting the steps above.
+  return checkVault(config);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +639,7 @@ function tidy(config: Config, args: Args): number {
   return 0;
 }
 
-function main(): number {
+async function main(): Promise<number> {
   let args: Args;
   try {
     args = parseArgs(process.argv.slice(2));
@@ -425,6 +654,8 @@ function main(): number {
     process.stdout.write(HELP);
     return 0;
   }
+
+  if (args.command === "setup") return await setup(args);
 
   let config: Config;
   try {
@@ -450,4 +681,6 @@ function main(): number {
 // process before the buffer drains. The skills run `lumis <cmd> --json` through
 // a pipe, so a real-sized vault produced truncated, unparseable JSON — 589 KB
 // to a file came back as 67 KB through a pipe.
-process.exitCode = main();
+main().then((code) => {
+  process.exitCode = code;
+});

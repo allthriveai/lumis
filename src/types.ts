@@ -11,7 +11,6 @@ export interface VaultPaths {
   templates: string;
   goals: string;
   ikigai: string;
-  voice: string;
 }
 
 export interface Config {

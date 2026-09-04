@@ -30,25 +30,22 @@ ages, cadence windows, the ikigai partition. Everything else is prompt.
 
 ```sh
 npm install && npm run build
-npm link                         # puts `lumis` on your PATH
-cp .lumisrc.example .lumisrc     # set vaultPath
-npm run check:vault              # every configured path must exist
+npm link                                 # puts `lumis` on your PATH
+lumis setup                              # asks where the vault goes; Enter takes ~/lumis-vault
 ```
 
-`.lumisrc` is gitignored. Your vault's location never enters this repo.
+Pass `--vault <path>` to skip the question. `lumis setup` creates the vault folders, copies the templates in, writes
+`.lumisrc` into the vault root, symlinks the four skills into
+`~/.claude/skills`, and runs `check-vault`. It only ever creates what is
+absent: an existing note, config or skill folder is reported and left alone, so
+running it again is safe. Restart Claude Code afterwards so it sees the skills.
 
-Copy the templates into your vault and edit them:
+`.lumisrc` lives in your vault, not here, and is gitignored anyway. Run the
+skills from inside the vault, where it is picked up from the working
+directory, or set `LUMIS_VAULT` to run `lumis` from anywhere.
 
-```sh
-cp "templates/vault/Daily Note.md" "$VAULT/Templates/"
-cp templates/vault/Goals.md templates/vault/Ikigai.md "$VAULT/Lumis/"
-```
-
-`npm link` matters: the skills shell out to `lumis`, so it has to be on your
-PATH. Run the skills from inside your vault, where `.lumisrc` is picked up from
-the working directory.
-
-Then make the skills available from inside your vault:
+If you would rather do it by hand, the pieces are: copy `templates/vault/*`
+into the vault, copy `.lumisrc.example` to `<vault>/.lumisrc`, and
 
 ```sh
 for s in journal check-in review ikigai; do ln -s "$PWD/.claude/skills/$s" ~/.claude/skills/$s; done
@@ -73,6 +70,7 @@ which is what `/check-in` and `/review` read.
 The CLI underneath, if you want it directly:
 
 ```sh
+lumis setup [--vault <path>] # once; asks if no path given; creates only what is absent
 lumis today                  # where you are; creates nothing
 lumis today --append-stdin   # capture free-hand writing from stdin
 lumis week
